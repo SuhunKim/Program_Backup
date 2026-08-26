@@ -29,24 +29,7 @@ public partial class HistoryControl : UserControlBase
     _selectAllButton.Click += (_, _) => ToggleAll();
     _cancelButton.Click += (_, _) => m_oCancellationTokenSource?.Cancel();
 
-        // MonthCalendar는 윈도우 핸들이 생겨야 PreferredSize가 정확해진다(ApplyCalendarSizing() 주석 참고).
-        // 핸들은 실제 실행 중에도, VS 디자이너가 미리보기를 그릴 때도 똑같이 생성되므로 여기서 구독해두면
-        // RefreshBackupList()를 타지 않는 디자이너 캔버스에서도 달력이 제대로 된 격자로 보인다.
-        _calendar.HandleCreated += (_, _) => ApplyCalendarSizing();
-
-        if (IsDesignTime)
-        {
-            // 디자이너 캔버스 전용 미리보기 데이터. LicenseManager.UsageMode가 Designtime일 때만
-            // 실행되므로 실제 앱 실행(F5) 시에는 절대 타지 않는다 — RefreshBackupList()가 실데이터로
-            // 이 값들을 덮어쓴다. .Designer.cs는 건드리지 않으니 디자이너 저장 시 재직렬화 위험도 없다.
-            PopulateDesignTimeSampleData();
-        }
   }
-
-    /// <summary>this.DesignMode는 편집 대상 컨트롤 자신의 생성자 안에서는 Site가 아직 안 붙어서 항상
-    /// false로 나오는 함정이 있어, MainForm.cs와 동일하게 LicenseManager.UsageMode로 판단한다.</summary>
-    private static bool IsDesignTime =>
-        System.ComponentModel.LicenseManager.UsageMode == System.ComponentModel.LicenseUsageMode.Designtime;
 
 	public HistoryControl(
         ISettingsService settingsService,
@@ -88,39 +71,6 @@ public partial class HistoryControl : UserControlBase
         layout.Controls.Add(countCard, 1, 0);
         row.Controls.Add(layout);
         return row;
-    }
-
-    /// <summary>
-    /// VS 디자이너 캔버스에서만 실행되는 미리보기 채우기(<see cref="IsDesignTime"/> 참고). 실제 서비스는
-    /// 전혀 건드리지 않고 화면에 보일 값만 하드코딩한 샘플로 채워서, F5로 실행하지 않아도 레이아웃/데이터
-    /// 배치를 눈으로 확인할 수 있게 한다.
-    /// </summary>
-    private void PopulateDesignTimeSampleData()
-    {
-        var today = DateTime.Today;
-        var sampleRecords = new List<BackupRecord>
-        {
-            new() { CreatedAt = today, Kind = BackupKind.FullZip, FullPath = @"D:\Backup\20260826 - 1430.zip", FileName = "20260826 - 1430.zip", SizeBytes = 512L * 1024 * 1024 },
-            new() { CreatedAt = today.AddHours(-3), Kind = BackupKind.SelectiveFolders, FullPath = @"D:\Backup\20260826 - 1130_files", FileName = "20260826 - 1130_files", SizeBytes = 128L * 1024 * 1024 },
-            new() { CreatedAt = today.AddDays(-1), Kind = BackupKind.FullZip, FullPath = @"D:\Backup\20260825 - 0900.zip", FileName = "20260825 - 0900.zip", SizeBytes = 480L * 1024 * 1024 },
-        };
-        var sampleDifferences = new List<XmlDifference>
-        {
-            new() { Apply = true, RelativeFilePath = @"Config\App.config", XmlPath = "//setting[@name='Timeout']", CurrentValue = "30", BackupValue = "60" },
-            new() { Apply = false, RelativeFilePath = @"Config\Connections.xml", XmlPath = "//connection/@server", CurrentValue = "DB01", BackupValue = "DB02" },
-        };
-
-        _summaryDateValue.Text = string.Format("{0:yyyy년 M월 d일}", today);
-        _summaryCountValue.Text = string.Format("백업 {0}건  ·  로그 {1}건", sampleRecords.Count, 5);
-
-        _calendar.BoldedDates = new[] { today, today.AddDays(-1), today.AddDays(-2) };
-
-        _backupCombo.DataSource = sampleRecords;
-        _sourceCombo.DataSource = sampleRecords;
-
-        _grid.DataSource = sampleDifferences;
-        _emptyStateLabel.Visible = false;
-        _summaryLabel.Text = string.Format("차이점 {0:N0}개를 찾았습니다.", sampleDifferences.Count);
     }
 
     private void ConfigureCompareColumns()
