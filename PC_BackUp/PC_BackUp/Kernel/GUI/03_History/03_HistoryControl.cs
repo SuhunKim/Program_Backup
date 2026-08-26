@@ -1,3 +1,4 @@
+using System.Windows.Forms.VisualStyles;
 using PC_BackUp.Services;
 
 namespace PC_BackUp;
@@ -24,9 +25,15 @@ public partial class HistoryControl : UserControlBase
 
     _calendar.DateSelected += (_, eventArgs) => SelectDate(eventArgs.Start);
     _grid.DataBindingComplete += (_, _) => _emptyStateLabel.Visible = _grid.Rows.Count == 0;
+    _grid.CellFormatting += (_, e) =>
+    {
+        if (_grid.Columns[e.ColumnIndex].HeaderText == "No.")
+            e.Value = (e.RowIndex + 1).ToString();
+    };
+    _grid.CellPainting += UiPaint_ApplyHeader;
+    _grid.CellMouseClick += UiClick_ApplyHeader;
 
     _logViewButton.Click += (_, _) => ToggleLogView();
-    _selectAllButton.Click += (_, _) => ToggleAll();
     _cancelButton.Click += (_, _) => m_oCancellationTokenSource?.Cancel();
 
   }
@@ -76,7 +83,16 @@ public partial class HistoryControl : UserControlBase
     private void ConfigureCompareColumns()
     {
         _grid.Columns.Clear();
-        _grid.Columns.Add(new DataGridViewCheckBoxColumn { HeaderText = "적용", DataPropertyName = nameof(XmlDifference.Apply), Width = 58 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            HeaderText = "No.",
+            Width = 45,
+            ReadOnly = true,
+            SortMode = DataGridViewColumnSortMode.NotSortable,
+            DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleCenter },
+            HeaderCell = { Style = { Alignment = DataGridViewContentAlignment.MiddleCenter } }
+        });
+        _grid.Columns.Add(new DataGridViewCheckBoxColumn { HeaderText = "적용", DataPropertyName = nameof(XmlDifference.Apply), Width = 78 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "XML 파일", DataPropertyName = nameof(XmlDifference.RelativeFilePath), Width = 340, ReadOnly = true });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "현재", DataPropertyName = nameof(XmlDifference.CurrentValue), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, ReadOnly = true });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "백업", DataPropertyName = nameof(XmlDifference.BackupValue), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, ReadOnly = true });
@@ -85,9 +101,60 @@ public partial class HistoryControl : UserControlBase
     private void ConfigureLogColumns()
     {
         _grid.Columns.Clear();
+        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            HeaderText = "No.",
+            Width = 45,
+            ReadOnly = true,
+            SortMode = DataGridViewColumnSortMode.NotSortable,
+            DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleCenter },
+            HeaderCell = { Style = { Alignment = DataGridViewContentAlignment.MiddleCenter } }
+        });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "시간", DataPropertyName = nameof(LogEntry.TimestampText), Width = 150, ReadOnly = true });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "레벨", DataPropertyName = nameof(LogEntry.Level), Width = 80, ReadOnly = true });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "메시지", DataPropertyName = nameof(LogEntry.Message), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, ReadOnly = true });
+    }
+
+    /// <summary>"적용" 헤더 칸에 전체 선택/해제 체크박스를 직접 그린다 — DataGridView 헤더는
+    /// 기본적으로 체크박스를 지원하지 않아 CellPainting으로 수동으로 그려야 한다. 컬럼 순서가
+    /// 바뀌어도 안전하도록 인덱스가 아니라 컬럼 타입(DataGridViewCheckBoxColumn)으로 대상을
+    /// 찾는다.</summary>
+    private void UiPaint_ApplyHeader(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex != -1 || _grid.Columns[e.ColumnIndex] is not DataGridViewCheckBoxColumn)
+            return;
+        if (e.Graphics is null || e.CellStyle is null)
+            return;
+
+        e.PaintBackground(e.CellBounds, true);
+
+        var items = _grid.DataSource as List<XmlDifference>;
+        var state = items is { Count: > 0 } && items.All(item => item.Apply)
+            ? CheckBoxState.CheckedNormal
+            : CheckBoxState.UncheckedNormal;
+        // 라벨을 왼쪽, 체크박스를 오른쪽에 둔다 — "적용 [체크박스]" 순서가 "[체크박스] 적용"보다
+        // 자연스럽게 읽힌다는 피드백(2026-08-26)을 반영.
+        var glyphSize = CheckBoxRenderer.GetGlyphSize(e.Graphics, state);
+        var checkboxLocation = new Point(
+            e.CellBounds.Right - glyphSize.Width - 8,
+            e.CellBounds.Top + (e.CellBounds.Height - glyphSize.Height) / 2);
+        CheckBoxRenderer.DrawCheckBox(e.Graphics, checkboxLocation, state);
+
+        var textBounds = new Rectangle(e.CellBounds.Left + 4, e.CellBounds.Top,
+            checkboxLocation.X - e.CellBounds.Left - 4, e.CellBounds.Height);
+        TextRenderer.DrawText(e.Graphics, e.Value?.ToString() ?? string.Empty, e.CellStyle.Font, textBounds,
+            e.CellStyle.ForeColor, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+
+        e.Handled = true;
+    }
+
+    /// <summary>"적용" 헤더 칸을 클릭하면 기존 ToggleAll()을 그대로 재사용해 전체 선택/해제한다
+    /// ("전체 적용 선택/해제" 버튼이 하던 일을 헤더 체크박스가 대신한다).</summary>
+    private void UiClick_ApplyHeader(object? sender, DataGridViewCellMouseEventArgs e)
+    {
+        if (e.RowIndex != -1 || _grid.Columns[e.ColumnIndex] is not DataGridViewCheckBoxColumn)
+            return;
+        ToggleAll();
     }
 
     /// <summary>
@@ -101,6 +168,54 @@ public partial class HistoryControl : UserControlBase
         var panel1Width = _calendar.Width + CalendarLeftMargin + 20;
         if (_workspaceSplit.SplitterDistance != panel1Width)
             _workspaceSplit.SplitterDistance = panel1Width;
+
+        // 캘린더 아래로 남는 빈 공간을 "이번 달 요약" + "최근 이력 바로가기"로 채운다.
+        var contentTop = _calendar.Bottom + 14;
+        _calendarStatsLabel.Location = new Point(_calendar.Left, contentTop);
+        _calendarStatsLabel.Size = new Size(_calendar.Width, 20);
+        _calendarRecentTitle.Location = new Point(_calendar.Left, contentTop + 26);
+        _calendarRecentTitle.Size = new Size(_calendar.Width, 18);
+        _calendarRecentPanel.Location = new Point(_calendar.Left, contentTop + 46);
+        _calendarRecentPanel.Size = new Size(_calendar.Width, 160);
+    }
+
+    /// <summary>
+    /// 캘린더 아래 "이번 달 요약"과 "최근 이력" 바로가기 목록을 갱신한다. referenceDate가 속한
+    /// 달을 기준으로 통계를 내고, 전체 기록 중 최근 날짜 5개를 클릭 가능한 링크로 보여준다 —
+    /// 클릭하면 그 날짜로 캘린더 선택이 바로 이동한다.
+    /// </summary>
+    private void UpdateCalendarSidebar(DateTime referenceDate)
+    {
+        var monthBackupCount = m_oAllRecords.Count(record =>
+            record.CreatedAt.Year == referenceDate.Year && record.CreatedAt.Month == referenceDate.Month);
+        var monthLogCount = m_oAllLogEntries.Count(entry =>
+            entry.Timestamp.Year == referenceDate.Year && entry.Timestamp.Month == referenceDate.Month);
+        _calendarStatsLabel.Text = string.Format("이번 달 백업 {0}건  ·  로그 {1}건", monthBackupCount, monthLogCount);
+
+        _calendarRecentPanel.Controls.Clear();
+        var recentDates = m_oAllRecords.Select(record => record.CreatedAt.Date)
+            .Union(m_oAllLogEntries.Select(entry => entry.Timestamp.Date))
+            .Distinct()
+            .OrderByDescending(date => date)
+            .Take(5);
+        foreach (var date in recentDates)
+        {
+            var link = new LinkLabel
+            {
+                Text = string.Format("{0:yyyy-MM-dd}", date),
+                AutoSize = true,
+                Font = new Font("맑은 고딕", 8.5F),
+                LinkColor = ColorRGB.Primary,
+                Margin = new Padding(0, 2, 0, 2)
+            };
+            link.Click += (_, _) =>
+            {
+                _calendar.SelectionStart = date;
+                _calendar.SelectionEnd = date;
+                SelectDate(date);
+            };
+            _calendarRecentPanel.Controls.Add(link);
+        }
     }
 
     private void RefreshBackupList()
@@ -137,11 +252,15 @@ public partial class HistoryControl : UserControlBase
 
         _backupCombo.DataSource = null;
         _backupCombo.DataSource = dayRecords;
-        // Source 콤보(백업끼리 비교할 때)도 같은 날짜의 백업 목록을 공유한다.
+        // Source 콤보(백업끼리 비교할 때)도 같은 날짜의 백업 목록을 쓰지만, dayRecords를 그대로
+        // 다시 넘기면 두 콤보가 완전히 같은 List 인스턴스를 공유하게 되어 WinForms가 둘을 같은
+        // BindingContext 커런시로 묶어버린다 — 한쪽에서 선택을 바꾸면 다른 쪽도 같이 바뀌어서
+        // Source/Dest를 다르게 고를 수 없는 원인이었다. 별도 리스트 인스턴스로 복사해 끊어준다.
         _sourceCombo.DataSource = null;
-        _sourceCombo.DataSource = dayRecords;
+        _sourceCombo.DataSource = new List<BackupRecord>(dayRecords);
         SetEmptyState(dayRecords.Count == 0 ? "선택한 날짜에는 백업 이력이 없습니다." : string.Empty);
         _compareButton.Enabled = !m_bIsBusy && dayRecords.Count > 0;
+        UpdateCalendarSidebar(date);
 
         if (m_bIsLogView)
             ShowLogEntries(date);
@@ -152,9 +271,11 @@ public partial class HistoryControl : UserControlBase
         var entries = m_oAllLogEntries.Where(entry => entry.Timestamp.Date == date.Date).ToList();
         _grid.DataSource = entries;
         SetEmptyState(entries.Count == 0 ? "이 날짜에 기록된 작업 로그가 없습니다." : string.Empty);
-        _summaryLabel.Text = entries.Count == 0
-            ? "이 날짜에 로그가 없습니다."
-            : string.Format("{0:yyyy년 M월 d일} 로그 {1:N0}건", date, entries.Count);
+        SetSummaryStatus(
+            entries.Count == 0
+                ? "이 날짜에 로그가 없습니다."
+                : string.Format("{0:yyyy년 M월 d일} 로그 {1:N0}건", date, entries.Count),
+            isSuccess: false);
     }
 
     private async void UiClick_Compare(object? sender, EventArgs e)
@@ -176,7 +297,8 @@ public partial class HistoryControl : UserControlBase
         }
 
         m_bIsBusy = true;
-        SetBusy(true, "XML 설정을 비교하고 있습니다...");
+        SetSummaryStatus("XML 설정을 비교하고 있습니다...", isSuccess: false);
+        SetBusy(true);
         m_oCancellationTokenSource = new CancellationTokenSource();
         try
         {
@@ -185,9 +307,11 @@ public partial class HistoryControl : UserControlBase
             _grid.DataSource = differences.ToList();
             UpdateCompareColumnHeaders(sourceIsCurrent ? "현재" : sourceRecord!.FileName, destinationRecord.FileName);
             SetEmptyState(differences.Count == 0 ? "Source와 Destination 설정이 같습니다." : string.Empty);
-            _summaryLabel.Text = differences.Count == 0
-                ? "Source와 Destination 설정이 같습니다."
-                : string.Format("차이점 {0:N0}개를 찾았습니다.", differences.Count);
+            SetSummaryStatus(
+                differences.Count == 0
+                    ? "Source와 Destination 설정이 같습니다."
+                    : string.Format("차이점 {0:N0}개를 찾았습니다.", differences.Count),
+                isSuccess: differences.Count == 0);
             UpdateApplyAvailability();
             m_oLoggingService?.LogInfo(string.Format(
                 "XML 비교 완료: 차이점 {0}개 (Source: {1}, Destination: {2})",
@@ -197,12 +321,12 @@ public partial class HistoryControl : UserControlBase
         {
             m_oLoggingService?.LogError("XML 비교 중 오류가 발생했습니다.", exception);
             MessageBox.Show(this, exception.Message, "비교 실패", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            _summaryLabel.Text = "비교 중 오류가 발생했습니다.";
+            SetSummaryStatus("비교 중 오류가 발생했습니다.", isSuccess: false);
         }
         finally
         {
             m_bIsBusy = false;
-            SetBusy(false, _summaryLabel.Text);
+            SetBusy(false);
             m_oCancellationTokenSource?.Dispose();
             m_oCancellationTokenSource = null;
         }
@@ -223,9 +347,9 @@ public partial class HistoryControl : UserControlBase
     /// 실제 선택된 Source/Destination 이름으로 갱신한다.</summary>
     private void UpdateCompareColumnHeaders(string sourceLabel, string destinationLabel)
     {
-        if (_grid.Columns.Count < 4) return;
-        _grid.Columns[2].HeaderText = string.Format("Source ({0})", sourceLabel);
-        _grid.Columns[3].HeaderText = string.Format("Destination ({0})", destinationLabel);
+        if (_grid.Columns.Count < 5) return;
+        _grid.Columns[3].HeaderText = string.Format("Source ({0})", sourceLabel);
+        _grid.Columns[4].HeaderText = string.Format("Destination ({0})", destinationLabel);
     }
 
     private void UiChange_SourceIsCurrent(object? sender, EventArgs e)
@@ -257,7 +381,8 @@ public partial class HistoryControl : UserControlBase
             return;
 
         m_bIsBusy = true;
-        SetBusy(true, "선택한 설정을 적용하고 있습니다...");
+        SetSummaryStatus("선택한 설정을 적용하고 있습니다...", isSuccess: false);
+        SetBusy(true);
         m_oCancellationTokenSource = new CancellationTokenSource();
         try
         {
@@ -269,18 +394,18 @@ public partial class HistoryControl : UserControlBase
                 m_oLoggingService?.LogError(string.Format("설정 적용 실패: {0}", result.Message));
             MessageBox.Show(this, result.Message, result.Succeeded ? "설정 적용" : "적용 실패", MessageBoxButtons.OK,
                 result.Succeeded ? MessageBoxIcon.Information : MessageBoxIcon.Error);
-            _summaryLabel.Text = result.Message.Replace(Environment.NewLine, "  ");
+            SetSummaryStatus(result.Message.Replace(Environment.NewLine, "  "), isSuccess: result.Succeeded);
         }
         catch (Exception exception)
         {
             m_oLoggingService?.LogError("설정 적용 중 예외가 발생했습니다.", exception);
             MessageBox.Show(this, exception.Message, "적용 실패", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            _summaryLabel.Text = "적용 중 오류가 발생했습니다.";
+            SetSummaryStatus("적용 중 오류가 발생했습니다.", isSuccess: false);
         }
         finally
         {
             m_bIsBusy = false;
-            SetBusy(false, _summaryLabel.Text);
+            SetBusy(false);
             m_oCancellationTokenSource?.Dispose();
             m_oCancellationTokenSource = null;
         }
@@ -309,7 +434,7 @@ public partial class HistoryControl : UserControlBase
             ConfigureCompareColumns();
             _grid.DataSource = null;
             SetEmptyState("비교할 백업을 선택한 뒤 XML 비교를 실행하세요.");
-            _summaryLabel.Text = "백업을 선택하고 XML 비교를 실행하세요.";
+            SetSummaryStatus("백업을 선택하고 XML 비교를 실행하세요.", isSuccess: false);
             _applyButton.Enabled = false;
             _logViewButton.Text = "작업 로그";
         }
@@ -320,19 +445,28 @@ public partial class HistoryControl : UserControlBase
         _sourceIsCurrentCheckBox.Visible = !m_bIsLogView;
         _sourceCombo.Visible = !m_bIsLogView;
         _compareButton.Visible = !m_bIsLogView;
-        _selectAllButton.Visible = !m_bIsLogView;
         _applyButton.Visible = !m_bIsLogView;
     }
 
-    private void SetBusy(bool busy, string text)
+    private void SetBusy(bool busy)
     {
         _compareButton.Enabled = !busy;
         _logViewButton.Enabled = !busy;
         _cancelButton.Visible = busy;
-        _summaryLabel.Text = text;
         // 복원 화면과 동일하게 막연한 진행 애니메이션 대신 실제 진행률(%)로 표시한다.
         _progress.Style = ProgressBarStyle.Blocks;
         _progress.Value = 0;
+    }
+
+    /// <summary>하단 상태 표시줄(_summaryLabel)의 스타일을 상태에 맞게 바꾼다. "설정이 같습니다"
+    /// 같은 긍정적인 결과가 회색 글자에 묻혀 눈에 안 띈다는 피드백(2026-08-26)을 반영해, 성공
+    /// 결과일 때만 초록 배지 스타일(체크 표시 + 초록 배경)로 강조한다.</summary>
+    private void SetSummaryStatus(string text, bool isSuccess)
+    {
+        _summaryLabel.Text = isSuccess ? string.Format("✓ {0}", text) : text;
+        _summaryLabel.BackColor = isSuccess ? ColorRGB.SafetyBackground : Color.Transparent;
+        _summaryLabel.ForeColor = isSuccess ? ColorRGB.SafetyText : ColorRGB.MutedText;
+        _summaryLabel.Font = new Font("맑은 고딕", 9F, isSuccess ? FontStyle.Bold : FontStyle.Regular);
     }
 
     private void SetEmptyState(string text)

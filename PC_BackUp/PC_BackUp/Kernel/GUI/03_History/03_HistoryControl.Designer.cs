@@ -35,6 +35,9 @@ partial class HistoryControl
     private readonly Label _summaryLabel = new();
     private readonly ProgressBar _progress = new();
     private readonly MonthCalendar _calendar = new();
+    private readonly Label _calendarStatsLabel = new();
+    private readonly Label _calendarRecentTitle = new();
+    private readonly FlowLayoutPanel _calendarRecentPanel = new();
     private readonly Label _summaryDateCaption = new();
     private readonly Label _summaryDateValue = new();
     private readonly Label _summaryCountCaption = new();
@@ -42,12 +45,10 @@ partial class HistoryControl
     private StyledButton _compareButton = null!;
     private StyledButton _applyButton = null!;
     private StyledButton _logViewButton = null!;
-    private StyledButton _selectAllButton = null!;
     private StyledButton _cancelButton = null!;
     private SplitContainer _workspaceSplit = null!;
-    private readonly ToolTip _selectAllToolTip = new();
 
-    protected override void Dispose(bool disposing) { if (disposing) { components?.Dispose(); _selectAllToolTip.Dispose(); } base.Dispose(disposing); }
+    protected override void Dispose(bool disposing) { if (disposing) { components?.Dispose(); } base.Dispose(disposing); }
 
     private const int CalendarTitleHeight = 36;
     private const int CalendarLeftMargin = 6;
@@ -68,7 +69,6 @@ partial class HistoryControl
         _compareButton = new PC_BackUp.StyledButton();
         _applyButton = new PC_BackUp.StyledButton();
         _logViewButton = new StyledButton();
-        _selectAllButton = new StyledButton();
         _cancelButton = new StyledButton();
         SuspendLayout();
         headerPanel.Dock = DockStyle.Top;
@@ -94,6 +94,20 @@ partial class HistoryControl
         _calendar.Location = new Point(CalendarLeftMargin, CalendarTitleHeight + 4);
         _calendar.MaxSelectionCount = 1;
         _calendar.ShowTodayCircle = true;
+        // 캘린더 아래로 남는 빈 공간을 "이번 달 요약"과 "최근 이력 바로가기"로 채운다. 실제
+        // 위치/크기는 캘린더의 실제 크기가 확정된 뒤(ApplyCalendarSizing())에 다시 잡는다.
+        _calendarStatsLabel.ForeColor = ColorRGB.Text;
+        _calendarStatsLabel.Font = new Font("맑은 고딕", 9F, FontStyle.Bold);
+        _calendarStatsLabel.TextAlign = ContentAlignment.TopLeft;
+        _calendarStatsLabel.AutoSize = false;
+        _calendarRecentTitle.Text = "최근 이력";
+        _calendarRecentTitle.ForeColor = ColorRGB.MutedText;
+        _calendarRecentTitle.Font = new Font("맑은 고딕", 8.5F, FontStyle.Bold);
+        _calendarRecentTitle.TextAlign = ContentAlignment.TopLeft;
+        _calendarRecentTitle.AutoSize = false;
+        _calendarRecentPanel.FlowDirection = FlowDirection.TopDown;
+        _calendarRecentPanel.WrapContents = false;
+        _calendarRecentPanel.AutoSize = false;
         // _grid 열은 "비교" 화면의 기본값이고, 작업 로그 보기로 전환하면 ConfigureLogColumns()가 갈아 끼운다.
         _grid.BackgroundColor = ColorRGB.Surface;
         _grid.BorderStyle = BorderStyle.None;
@@ -115,7 +129,16 @@ partial class HistoryControl
         _grid.DefaultCellStyle.SelectionBackColor = ColorRGB.SidebarActive;
         _grid.DefaultCellStyle.SelectionForeColor = ColorRGB.Text;
         _grid.Dock = DockStyle.Fill;
-        _grid.Columns.Add(new DataGridViewCheckBoxColumn { HeaderText = "적용", DataPropertyName = nameof(XmlDifference.Apply), Width = 58 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            HeaderText = "No.",
+            Width = 45,
+            ReadOnly = true,
+            SortMode = DataGridViewColumnSortMode.NotSortable,
+            DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleCenter },
+            HeaderCell = { Style = { Alignment = DataGridViewContentAlignment.MiddleCenter } }
+        });
+        _grid.Columns.Add(new DataGridViewCheckBoxColumn { HeaderText = "적용", DataPropertyName = nameof(XmlDifference.Apply), Width = 78 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "XML 파일", DataPropertyName = nameof(XmlDifference.RelativeFilePath), Width = 340, ReadOnly = true });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "현재", DataPropertyName = nameof(XmlDifference.CurrentValue), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, ReadOnly = true });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "백업", DataPropertyName = nameof(XmlDifference.BackupValue), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, ReadOnly = true });
@@ -223,6 +246,9 @@ partial class HistoryControl
         _workspaceSplit.Panel1.BackColor = ColorRGB.Surface;
         _workspaceSplit.Panel1.Padding = new Padding(CalendarLeftMargin, 0, 10, 0);
         _workspaceSplit.Panel1.Controls.Add(_calendar);
+        _workspaceSplit.Panel1.Controls.Add(_calendarStatsLabel);
+        _workspaceSplit.Panel1.Controls.Add(_calendarRecentTitle);
+        _workspaceSplit.Panel1.Controls.Add(_calendarRecentPanel);
         _workspaceSplit.Panel1.Controls.Add(calendarTitle);
         _workspaceSplit.Panel2.BackColor = ColorRGB.Surface;
         _workspaceSplit.Panel2.Controls.Add(gridHost);
@@ -239,15 +265,6 @@ partial class HistoryControl
         bottomBar.Dock = DockStyle.Bottom;
         bottomBar.Height = 66;
         bottomBar.Padding = new Padding(0, 12, 0, 0);
-        _selectAllButton.ButtonType = StyledButtonType.Secondary;
-        _selectAllButton.Text = "전체 적용 선택/해제";
-        _selectAllButton.Dock = DockStyle.Left;
-        _selectAllButton.Width = 140;
-        _selectAllButton.NormalBackColor = ColorRGB.Surface;
-        _selectAllButton.ForeColor = ColorRGB.Text;
-        _selectAllButton.BorderColor = ColorRGB.Border;
-        // 버튼 이름만으로는 무엇을 선택/해제하는지 알기 어려워 툴팁으로 동작을 풀어서 설명한다.
-        _selectAllToolTip.SetToolTip(_selectAllButton, "비교 결과 목록의 모든 항목 '적용' 체크박스를 한 번에 켜거나 끕니다.");
         _cancelButton.ButtonType = StyledButtonType.Secondary;
         _cancelButton.Text = "취소";
         _cancelButton.Dock = DockStyle.Right;
@@ -267,7 +284,6 @@ partial class HistoryControl
         _progress.Dock = DockStyle.Top;
         _progress.Height = 6;
         bottomBar.Controls.Add(_summaryLabel);
-        bottomBar.Controls.Add(_selectAllButton);
         bottomBar.Controls.Add(_cancelButton);
         bottomBar.Controls.Add(_applyButton);
         bottomBar.Controls.Add(_progress);
