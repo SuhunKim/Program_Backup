@@ -37,14 +37,20 @@ public sealed class XmlComparisonService
     {
         return await Task.Run(() =>
         {
-            var sourceDocuments = sourceRecord is null
-                ? ReadCurrentXml(settings.GetSourceRoot(), settings.BackupRootPath, cancellationToken)
-                : ReadBackupXml(sourceRecord, cancellationToken);
-            var destinationDocuments = ReadBackupXml(destinationRecord, cancellationToken);
-            var sourceLabel = sourceRecord is null ? "현재" : sourceRecord.FileName;
-            var destinationLabel = destinationRecord.FileName;
+            var selectiveFolderNames = settings.GetSelectiveFolderNames();
+            var sourceDocuments = FilterToSelectiveFolders(
+                sourceRecord is null
+                    ? ReadCurrentXml(settings.GetSourceRoot(), settings.BackupRootPath, cancellationToken)
+                    : ReadBackupXml(sourceRecord, cancellationToken),
+                selectiveFolderNames);
+            var destinationDocuments = FilterToSelectiveFolders(ReadBackupXml(destinationRecord, cancellationToken), selectiveFolderNames);
             var differences = new List<XmlDifference>();
 
+            // 백업/복원은 항상 Settings에 지정된 폴더(_bin, ConfigFile 등)만 다루는데, 전체 백업
+            // (FullZip)은 소스 루트를 통째로 담다 보니 지정 안 된 폴더(예: 예전에 있다가 지운
+            // "ConfigFile - 복사본" 같은 사본)까지 섞여 들어올 수 있다. 위 FilterToSelectiveFolders가
+            // 그런 무관한 폴더를 애초에 걸러내므로, 아래 비교 대상은 항상 지금 Settings 기준으로
+            // 의미 있는 파일만 남는다.
             var relativePaths = sourceDocuments.Keys.Union(destinationDocuments.Keys, StringComparer.OrdinalIgnoreCase).ToList();
             for (var index = 0; index < relativePaths.Count; index++)
             {
@@ -53,25 +59,51 @@ public sealed class XmlComparisonService
                 sourceDocuments.TryGetValue(relativePath, out var sourceXml);
                 destinationDocuments.TryGetValue(relativePath, out var destinationXml);
 
-                var sourceValues = FlattenXml(sourceXml, cancellationToken);
-                var destinationValues = FlattenXml(destinationXml, cancellationToken);
-                var hasDifference = sourceValues.Keys.Union(destinationValues.Keys, StringComparer.Ordinal)
-                    .Any(xmlPath => !sourceValues.TryGetValue(xmlPath, out var sourceValue) ||
-                                    !destinationValues.TryGetValue(xmlPath, out var destinationValue) ||
-                                    !string.Equals(sourceValue, destinationValue, StringComparison.Ordinal));
-                if (hasDifference)
+                // 파일 자체가 한쪽에만 있으면(새로 생기거나 없어진 파일) 필드 단위로 늘어놓는 대신
+                // "존재 차이"로 한 줄만 만든다 — 파일 전체가 새 것/없는 것이라 필드별 비교가
+                // 의미 없다. 그리드에서는 값 차이와 분리된 별도 목록에 경로만 보여준다.
+                if (sourceXml is null || destinationXml is null)
+                {
                     differences.Add(new XmlDifference
                     {
-                        RelativeFilePath = relativePath,
-                        XmlPath = "(파일 전체)",
-                        CurrentValue = string.Format("{0} XML", sourceLabel),
-                        BackupValue = string.Format("{0} XML", destinationLabel)
+                        Kind = sourceXml is null ? XmlDifferenceKind.ExistsOnlyInBackup : XmlDifferenceKind.ExistsOnlyInCurrent,
+                        RelativeFilePath = relativePath
                     });
+                    progress?.Report((index + 1) * 100 / Math.Max(1, relativePaths.Count));
+                    continue;
+                }
+
+                // 양쪽 다 파일이 있으면 실제로 어느 설정 항목(XmlPath)이 어떤 값에서 어떤 값으로
+                // 다른지 필드 단위로 전부 나열한다 — 예전에는 "파일 전체가 다름" 한 줄만 만들고
+                // 실제 값은 버렸는데, 그러면 그리드에서 뭐가 다른지 전혀 알 수 없었다.
+                var sourceValues = FlattenXml(sourceXml, cancellationToken);
+                var destinationValues = FlattenXml(destinationXml, cancellationToken);
+                foreach (var xmlPath in sourceValues.Keys.Union(destinationValues.Keys, StringComparer.Ordinal))
+                {
+                    var hasSourceValue = sourceValues.TryGetValue(xmlPath, out var sourceValue);
+                    var hasDestinationValue = destinationValues.TryGetValue(xmlPath, out var destinationValue);
+                    if (hasSourceValue && hasDestinationValue &&
+                        string.Equals(sourceValue, destinationValue, StringComparison.Ordinal))
+                        continue;
+
+                    differences.Add(new XmlDifference
+                    {
+                        Kind = XmlDifferenceKind.ValueChanged,
+                        RelativeFilePath = relativePath,
+                        XmlPath = xmlPath,
+                        CurrentValue = hasSourceValue ? sourceValue! : "(없음)",
+                        BackupValue = hasDestinationValue ? destinationValue! : "(없음)"
+                    });
+                }
                 progress?.Report((index + 1) * 100 / Math.Max(1, relativePaths.Count));
             }
 
+            // 존재 차이(구조적)는 실제 설정값이 달라진 항목보다 뒤로 보낸다 — 화면에서는 어차피
+            // 별도 목록으로 분리해서 보여주지만, Apply 같은 순서 의존 로직을 위해서도 값 차이를
+            // 먼저 정렬해 두는 편이 낫다.
             return (IReadOnlyList<XmlDifference>)differences
-                .OrderBy(item => item.RelativeFilePath, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(item => item.Kind == XmlDifferenceKind.ValueChanged ? 0 : 1)
+                .ThenBy(item => item.RelativeFilePath, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(item => item.XmlPath, StringComparer.Ordinal)
                 .ToList();
         }, cancellationToken);
@@ -193,6 +225,21 @@ public sealed class XmlComparisonService
             documents[entry.FullName.Replace('/', Path.DirectorySeparatorChar)] = ReadText(reader, cancellationToken);
         }
         return documents;
+    }
+
+    /// <summary>
+    /// 백업/복원은 항상 Settings에 지정된 폴더만 다루는데, 전체 백업(FullZip)은 소스 루트를
+    /// 통째로 담다 보니 지정 안 된 폴더까지 딸려 들어올 수 있다. 이력 비교는 백업 종류와 무관하게
+    /// 항상 "지금 Settings 기준"으로 스코프를 좁혀야 하므로, 관련 없는 최상위 폴더는 비교 대상에
+    /// 아예 올리지 않는다.
+    /// </summary>
+    private static Dictionary<string, string> FilterToSelectiveFolders(
+        Dictionary<string, string> documents,
+        IReadOnlyList<string> selectiveFolderNames)
+    {
+        return documents
+            .Where(entry => SelectiveFolderMatch.IsInsideAnyFolder(entry.Key, selectiveFolderNames))
+            .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
     }
 
     private static Dictionary<string, string> FlattenXml(string? xml, CancellationToken cancellationToken)

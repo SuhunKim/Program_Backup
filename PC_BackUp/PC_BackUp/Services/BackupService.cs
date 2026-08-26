@@ -147,16 +147,7 @@ public sealed class BackupService
         IReadOnlyList<string> folderNames)
     {
         var relativePath = Path.GetRelativePath(sourceRoot, filePath);
-        var firstSeparatorIndex = relativePath.IndexOfAny(new[]
-        {
-            Path.DirectorySeparatorChar,
-            Path.AltDirectorySeparatorChar
-        });
-        if (firstSeparatorIndex <= 0)
-            return false;
-
-        var topLevelFolderName = relativePath[..firstSeparatorIndex];
-        return folderNames.Contains(topLevelFolderName, StringComparer.OrdinalIgnoreCase);
+        return SelectiveFolderMatch.IsInsideAnyFolder(relativePath, folderNames);
     }
 
     private static void CreateZip(

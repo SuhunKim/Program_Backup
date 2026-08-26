@@ -41,6 +41,14 @@ internal static class ColorRGB
     public static readonly Color SafetyText = Color.FromArgb(27, 122, 76);
     public static readonly Color SafetyIcon = Color.FromArgb(45, 143, 96);
 
+    // 이력 관리 화면의 XML 비교 그리드에서 "현재"/"백업" 값 중 실제로 다른 부분만 형광펜처럼
+    // 강조할 때 쓴다(TextDiff 참고) — 빨강 계열: 현재 값에서 달라지는 부분, 노랑 계열: 백업
+    // 값으로 바뀌는 부분.
+    public static readonly Color DiffRemovedBackground = Color.FromArgb(253, 218, 218);
+    public static readonly Color DiffRemovedText = Color.FromArgb(153, 27, 27);
+    public static readonly Color DiffAddedBackground = Color.FromArgb(253, 235, 180);
+    public static readonly Color DiffAddedText = Color.FromArgb(120, 84, 6);
+
     /// <summary>
     /// 아이콘 배지 + 캡션 + 값으로 이뤄진 요약 카드(예: "선택된 백업 날짜 · 2026년 8월 20일").
     /// caption/value 라벨은 호출한 쪽에서 만들어 전달하므로, 나중에 값이 바뀌면 그 참조로 갈아 끼우면 된다.

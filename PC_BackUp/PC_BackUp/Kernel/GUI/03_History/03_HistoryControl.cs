@@ -32,6 +32,39 @@ public partial class HistoryControl : UserControlBase
     };
     _grid.CellPainting += UiPaint_ApplyHeader;
     _grid.CellMouseClick += UiClick_ApplyHeader;
+    _grid.CellPainting += UiPaint_DiffCell;
+    // "XML 파일" 열이 짧아진 만큼(말줄임 처리) 잘린 전체 경로와, 화면엔 안 보이는 정확한 위치
+    // (XmlDifference.XmlPath)를 툴팁으로 보여준다. "현재"/"백업" 헤더에는 형광펜 강조 색의
+    // 의미를 안내한다(별도 라벨을 추가하지 않고 기존 툴팁 경로를 재사용).
+    _grid.CellToolTipTextNeeded += (_, e) =>
+    {
+        if (e.RowIndex >= 0)
+        {
+            if (_grid.Columns[e.ColumnIndex].HeaderText != "XML 파일") return;
+            if (_grid.Rows[e.RowIndex].DataBoundItem is XmlDifference item)
+                e.ToolTipText = string.Format("{0}\n{1}", item.RelativeFilePath, item.XmlPath);
+            return;
+        }
+        if (_grid.Columns[e.ColumnIndex] is not DataGridViewTextBoxColumn column) return;
+        if (column.DataPropertyName == nameof(XmlDifference.CurrentValue))
+            e.ToolTipText = "빨강으로 강조된 부분이 백업 값과 다른 부분입니다.";
+        else if (column.DataPropertyName == nameof(XmlDifference.BackupValue))
+            e.ToolTipText = "노랑으로 강조된 부분이 현재 값과 다른 부분입니다.";
+    };
+
+    // "파일/폴더 존재 차이" 목록의 "상태" 열은 XmlDifferenceKind를 그대로 바인딩하면
+    // "ExistsOnlyInCurrent" 같은 영문이 나오니 사람이 읽을 텍스트로 바꿔 준다.
+    _existenceGrid.CellFormatting += (_, e) =>
+    {
+        if (_existenceGrid.Columns[e.ColumnIndex].DataPropertyName != nameof(XmlDifference.Kind))
+            return;
+        e.Value = (XmlDifferenceKind)e.Value! switch
+        {
+            XmlDifferenceKind.ExistsOnlyInCurrent => "현재에만 있음",
+            XmlDifferenceKind.ExistsOnlyInBackup => "백업에만 있음",
+            _ => e.Value
+        };
+    };
 
     _logViewButton.Click += (_, _) => ToggleLogView();
     _cancelButton.Click += (_, _) => m_oCancellationTokenSource?.Cancel();
@@ -93,7 +126,7 @@ public partial class HistoryControl : UserControlBase
             HeaderCell = { Style = { Alignment = DataGridViewContentAlignment.MiddleCenter } }
         });
         _grid.Columns.Add(new DataGridViewCheckBoxColumn { HeaderText = "적용", DataPropertyName = nameof(XmlDifference.Apply), Width = 78 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "XML 파일", DataPropertyName = nameof(XmlDifference.RelativeFilePath), Width = 340, ReadOnly = true });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "XML 파일", DataPropertyName = nameof(XmlDifference.RelativeFilePath), Width = 150, ReadOnly = true });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "현재", DataPropertyName = nameof(XmlDifference.CurrentValue), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, ReadOnly = true });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "백업", DataPropertyName = nameof(XmlDifference.BackupValue), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, ReadOnly = true });
     }
@@ -155,6 +188,60 @@ public partial class HistoryControl : UserControlBase
         if (e.RowIndex != -1 || _grid.Columns[e.ColumnIndex] is not DataGridViewCheckBoxColumn)
             return;
         ToggleAll();
+    }
+
+    /// <summary>
+    /// "현재"/"백업" 열에서 값이 다른 부분만 형광펜처럼 강조해서 그린다(TextDiff 참고). 열 판별은
+    /// 헤더 텍스트가 아니라 DataPropertyName으로 한다 — UpdateCompareColumnHeaders()가 헤더 텍스트를
+    /// "Source (...)"/"Destination (...)"으로 바꿔버리므로 텍스트 매칭은 그 뒤에 깨진다. 이 그리드에는
+    /// 이제 Kind == ValueChanged인 행만 들어오므로(존재 차이는 _existenceGrid로 분리됨) 값 자체는
+    /// 항상 실제 비교 대상이다.
+    /// </summary>
+    private void UiPaint_DiffCell(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.Graphics is null || e.CellStyle is null)
+            return;
+        if (_grid.Columns[e.ColumnIndex] is not DataGridViewTextBoxColumn column)
+            return;
+        var isCurrentColumn = column.DataPropertyName == nameof(XmlDifference.CurrentValue);
+        var isBackupColumn = column.DataPropertyName == nameof(XmlDifference.BackupValue);
+        if (!isCurrentColumn && !isBackupColumn)
+            return;
+        if (_grid.Rows[e.RowIndex].DataBoundItem is not XmlDifference item)
+            return;
+
+        e.PaintBackground(e.CellBounds, true);
+
+        var segments = TextDiff.Compute(item.CurrentValue, item.BackupValue)
+            .Where(segment => segment.Kind == TextDiff.SegmentKind.Equal ||
+                               (isCurrentColumn && segment.Kind == TextDiff.SegmentKind.RemovedFromLeft) ||
+                               (isBackupColumn && segment.Kind == TextDiff.SegmentKind.AddedInRight));
+
+        var x = e.CellBounds.Left + 4;
+        foreach (var segment in segments)
+        {
+            var size = TextRenderer.MeasureText(e.Graphics, segment.Text, e.CellStyle.Font, e.CellBounds.Size, TextFormatFlags.NoPadding);
+            var segmentBounds = new Rectangle(x, e.CellBounds.Top, size.Width, e.CellBounds.Height);
+            if (segment.Kind != TextDiff.SegmentKind.Equal)
+            {
+                var highlightBackground = segment.Kind == TextDiff.SegmentKind.RemovedFromLeft
+                    ? ColorRGB.DiffRemovedBackground
+                    : ColorRGB.DiffAddedBackground;
+                using var brush = new SolidBrush(highlightBackground);
+                e.Graphics.FillRectangle(brush, segmentBounds);
+            }
+            var textColor = segment.Kind switch
+            {
+                TextDiff.SegmentKind.RemovedFromLeft => ColorRGB.DiffRemovedText,
+                TextDiff.SegmentKind.AddedInRight => ColorRGB.DiffAddedText,
+                _ => e.CellStyle.ForeColor
+            };
+            TextRenderer.DrawText(e.Graphics, segment.Text, e.CellStyle.Font, segmentBounds, textColor,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            x += size.Width;
+        }
+
+        e.Handled = true;
     }
 
     /// <summary>
@@ -304,18 +391,25 @@ public partial class HistoryControl : UserControlBase
         {
             var progress = new Progress<int>(value => _progress.Value = value);
             var differences = await m_oComparisonService.CompareAsync(m_oSettingsService.Load(), sourceRecord, destinationRecord, progress, m_oCancellationTokenSource.Token);
-            _grid.DataSource = differences.ToList();
+            // 성격이 다른 두 종류를 서로 다른 목록에 나눠 담는다 — "설정값 차이"(실제 값이 다름)는
+            // _grid(빨강/노랑 강조), "존재 차이"(파일이 한쪽에만 있음)는 _existenceGrid(경로만).
+            var valueChanges = differences.Where(item => item.Kind == XmlDifferenceKind.ValueChanged).ToList();
+            var existenceDiffs = differences.Where(item => item.Kind != XmlDifferenceKind.ValueChanged).ToList();
+            _grid.DataSource = valueChanges;
+            _existenceGrid.DataSource = existenceDiffs;
+            _existenceHost.Visible = existenceDiffs.Count > 0;
             UpdateCompareColumnHeaders(sourceIsCurrent ? "현재" : sourceRecord!.FileName, destinationRecord.FileName);
-            SetEmptyState(differences.Count == 0 ? "Source와 Destination 설정이 같습니다." : string.Empty);
+            SetEmptyState(valueChanges.Count == 0 ? "Source와 Destination 설정이 같습니다." : string.Empty);
+            var isFullyEqual = valueChanges.Count == 0 && existenceDiffs.Count == 0;
             SetSummaryStatus(
-                differences.Count == 0
+                isFullyEqual
                     ? "Source와 Destination 설정이 같습니다."
-                    : string.Format("차이점 {0:N0}개를 찾았습니다.", differences.Count),
-                isSuccess: differences.Count == 0);
+                    : string.Format("설정값 차이 {0:N0}건  ·  존재 차이 {1:N0}건", valueChanges.Count, existenceDiffs.Count),
+                isSuccess: isFullyEqual);
             UpdateApplyAvailability();
             m_oLoggingService?.LogInfo(string.Format(
-                "XML 비교 완료: 차이점 {0}개 (Source: {1}, Destination: {2})",
-                differences.Count, sourceIsCurrent ? "현재" : sourceRecord!.FileName, destinationRecord.FileName));
+                "XML 비교 완료: 설정값 차이 {0}개, 존재 차이 {1}개 (Source: {2}, Destination: {3})",
+                valueChanges.Count, existenceDiffs.Count, sourceIsCurrent ? "현재" : sourceRecord!.FileName, destinationRecord.FileName));
         }
         catch (Exception exception)
         {
@@ -339,8 +433,9 @@ public partial class HistoryControl : UserControlBase
     /// </summary>
     private void UpdateApplyAvailability()
     {
-        var hasDifferences = _grid.DataSource is List<XmlDifference> items && items.Count > 0;
-        _applyButton.Enabled = hasDifferences && _sourceIsCurrentCheckBox.Checked;
+        var hasValueDifferences = _grid.DataSource is List<XmlDifference> items && items.Count > 0;
+        var hasExistenceDifferences = _existenceGrid.DataSource is List<XmlDifference> existenceItems && existenceItems.Count > 0;
+        _applyButton.Enabled = (hasValueDifferences || hasExistenceDifferences) && _sourceIsCurrentCheckBox.Checked;
     }
 
     /// <summary>ConfigureCompareColumns()가 고정 순서(적용/XML 파일/현재/백업)로 만든 열 헤더를
@@ -364,9 +459,14 @@ public partial class HistoryControl : UserControlBase
         if (!_sourceIsCurrentCheckBox.Checked)
             return; // Source가 현재가 아니면(백업끼리 비교) Apply는 의미가 없다 — 버튼도 비활성화되어 있다.
         _grid.EndEdit();
-        var selected = (_grid.DataSource as List<XmlDifference>)?
-            .Where(item => item.Apply)
-            .ToList() ?? new List<XmlDifference>();
+        _existenceGrid.EndEdit();
+        // 설정값 차이/존재 차이 두 목록에서 체크한 항목을 합쳐서 한 번에 적용한다 — Apply 로직
+        // 자체는 RelativeFilePath 단위로 백업 파일을 통째로 덮어쓰므로 두 목록을 섞어도 문제없다.
+        var selected = new List<XmlDifference>();
+        if (_grid.DataSource is List<XmlDifference> valueItems)
+            selected.AddRange(valueItems.Where(item => item.Apply));
+        if (_existenceGrid.DataSource is List<XmlDifference> existenceItems)
+            selected.AddRange(existenceItems.Where(item => item.Apply));
         if (selected.Count == 0)
         {
             MessageBox.Show(this, "적용할 항목의 체크박스를 선택하세요.", "선택 필요", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -423,6 +523,10 @@ public partial class HistoryControl : UserControlBase
     private void ToggleLogView()
     {
         m_bIsLogView = !m_bIsLogView;
+        // 작업 로그 보기로 전환하거나, 비교 화면으로 돌아왔지만 아직 새로 비교를 안 돌린 상태라면
+        // "존재 차이" 목록은 이전 비교 결과라 의미가 없으므로 같이 지운다.
+        _existenceGrid.DataSource = null;
+        _existenceHost.Visible = false;
         if (m_bIsLogView)
         {
             ConfigureLogColumns();

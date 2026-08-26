@@ -32,6 +32,11 @@ partial class HistoryControl
     private readonly Label _sourceComboLabel = new();
     private readonly DataGridView _grid = new();
     private readonly Label _emptyStateLabel = new();
+    // "파일/폴더 존재 차이"(한쪽에만 있는 파일)는 "설정값 차이"(_grid)와 성격이 달라서 별도
+    // 목록으로 분리한다 — 경로만 보여주면 되고, 값 비교 UI(빨강/노랑 강조 등)는 필요 없다.
+    private readonly Panel _existenceHost = new();
+    private readonly Label _existenceTitleLabel = new();
+    private readonly DataGridView _existenceGrid = new();
     private readonly Label _summaryLabel = new();
     private readonly ProgressBar _progress = new();
     private readonly MonthCalendar _calendar = new();
@@ -139,9 +144,48 @@ partial class HistoryControl
             HeaderCell = { Style = { Alignment = DataGridViewContentAlignment.MiddleCenter } }
         });
         _grid.Columns.Add(new DataGridViewCheckBoxColumn { HeaderText = "적용", DataPropertyName = nameof(XmlDifference.Apply), Width = 78 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "XML 파일", DataPropertyName = nameof(XmlDifference.RelativeFilePath), Width = 340, ReadOnly = true });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "XML 파일", DataPropertyName = nameof(XmlDifference.RelativeFilePath), Width = 150, ReadOnly = true });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "현재", DataPropertyName = nameof(XmlDifference.CurrentValue), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, ReadOnly = true });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "백업", DataPropertyName = nameof(XmlDifference.BackupValue), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, ReadOnly = true });
+        //
+        // _existenceGrid ("파일/폴더 존재 차이" — 한쪽에만 있는 파일의 경로만 보여준다)
+        //
+        _existenceTitleLabel.Text = "파일/폴더 존재 차이";
+        _existenceTitleLabel.Dock = DockStyle.Top;
+        _existenceTitleLabel.Height = 24;
+        _existenceTitleLabel.Padding = new Padding(4, 4, 0, 0);
+        _existenceTitleLabel.Font = new Font("맑은 고딕", 9F, FontStyle.Bold);
+        _existenceTitleLabel.ForeColor = ColorRGB.Text;
+        _existenceGrid.BackgroundColor = ColorRGB.Surface;
+        _existenceGrid.BorderStyle = BorderStyle.None;
+        _existenceGrid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
+        _existenceGrid.GridColor = ColorRGB.Border;
+        _existenceGrid.RowHeadersVisible = false;
+        _existenceGrid.AllowUserToAddRows = false;
+        _existenceGrid.AllowUserToDeleteRows = false;
+        _existenceGrid.AllowUserToResizeRows = false;
+        _existenceGrid.AutoGenerateColumns = false;
+        _existenceGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        _existenceGrid.MultiSelect = false;
+        _existenceGrid.RowTemplate.Height = 30;
+        _existenceGrid.ColumnHeadersHeight = 32;
+        _existenceGrid.ColumnHeadersDefaultCellStyle.BackColor = ColorRGB.GridHeaderBackground;
+        _existenceGrid.ColumnHeadersDefaultCellStyle.ForeColor = ColorRGB.Text;
+        _existenceGrid.ColumnHeadersDefaultCellStyle.Font = new Font("맑은 고딕", 9F, FontStyle.Bold);
+        _existenceGrid.EnableHeadersVisualStyles = false;
+        _existenceGrid.DefaultCellStyle.SelectionBackColor = ColorRGB.SidebarActive;
+        _existenceGrid.DefaultCellStyle.SelectionForeColor = ColorRGB.Text;
+        _existenceGrid.Dock = DockStyle.Fill;
+        _existenceGrid.Columns.Add(new DataGridViewCheckBoxColumn { HeaderText = "적용", DataPropertyName = nameof(XmlDifference.Apply), Width = 58 });
+        _existenceGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "상태", DataPropertyName = nameof(XmlDifference.Kind), Width = 110, ReadOnly = true });
+        _existenceGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "경로", DataPropertyName = nameof(XmlDifference.RelativeFilePath), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, ReadOnly = true });
+        _existenceHost.Dock = DockStyle.Top;
+        _existenceHost.Height = 150;
+        _existenceHost.BackColor = ColorRGB.Surface;
+        _existenceHost.Padding = new Padding(0, 0, 0, 8);
+        _existenceHost.Visible = false;
+        _existenceHost.Controls.Add(_existenceGrid);
+        _existenceHost.Controls.Add(_existenceTitleLabel);
         //
         // gridHost
         //
@@ -154,6 +198,7 @@ partial class HistoryControl
         _emptyStateLabel.TextAlign = ContentAlignment.MiddleCenter;
         gridHost.Controls.Add(_grid);
         gridHost.Controls.Add(_emptyStateLabel);
+        gridHost.Controls.Add(_existenceHost);
         //
         // selectionBar (비교 기준/대상 선택 + 작업 로그/XML 비교 버튼)
         // Source/Destination을 좌우 절반으로 나누지 않고 각각 전체 폭을 쓰는 한 줄씩(2행)으로
