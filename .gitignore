@@ -1,0 +1,11 @@
+# Build output
+**/obj/
+**/_bin/
+**/bin/
+
+# Visual Studio
+**/.vs/
+**/*.user
+
+# Runtime config/logs (not source)
+**/Config/

@@ -1,0 +1,58 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <LangVersion>11.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <BaseOutputPath>..\_bin</BaseOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="bin\**" />
+    <EmbeddedResource Remove="bin\**" />
+    <None Remove="bin\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="MainForm.Designer.cs">
+      <DependentUpon>MainForm.cs</DependentUpon>
+    </Compile>
+    <Compile Update="Kernel\GUI\01_Backup\01_BackupControl.Designer.cs">
+      <DependentUpon>01_BackupControl.cs</DependentUpon>
+    </Compile>
+    <Compile Update="Kernel\GUI\02_Recovery\02_RecoveryControl.Designer.cs">
+      <DependentUpon>02_RecoveryControl.cs</DependentUpon>
+    </Compile>
+    <Compile Update="Kernel\GUI\03_History\03_HistoryControl.Designer.cs">
+      <DependentUpon>03_HistoryControl.cs</DependentUpon>
+    </Compile>
+    <Compile Update="Kernel\GUI\04_Setting\04_SettingControl.Designer.cs">
+      <DependentUpon>04_SettingControl.cs</DependentUpon>
+    </Compile>
+    <Compile Update="_util\Component\StyledButton.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="_util\Component\StyledButton.Designer.cs">
+      <DependentUpon>StyledButton.cs</DependentUpon>
+    </Compile>
+    <EmbeddedResource Update="_util\Component\StyledButton.resx">
+      <DependentUpon>StyledButton.cs</DependentUpon>
+    </EmbeddedResource>
+    <Compile Update="_util\Component\MainMenuControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="_util\Component\MainMenuControl.Designer.cs">
+      <DependentUpon>MainMenuControl.cs</DependentUpon>
+    </Compile>
+    <Compile Update="_util\Component\CircularProgressBar.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="_util\Component\CircularProgressBar.Designer.cs">
+      <DependentUpon>CircularProgressBar.cs</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+</Project>
