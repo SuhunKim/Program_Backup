@@ -81,7 +81,7 @@ public sealed class BackupNameDialog : Form
         m_oConfirmButton.Width = 120;
         m_oConfirmButton.Margin = new Padding(0, 0, 10, 0);
         cancelButton.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
-        m_oConfirmButton.Click += ConfirmButton_Click;
+        m_oConfirmButton.Click += UiClick_Confirm;
         actionPanel.Controls.Add(m_oConfirmButton);
         actionPanel.Controls.Add(cancelButton);
 
@@ -95,7 +95,7 @@ public sealed class BackupNameDialog : Form
         UpdatePreview();
     }
 
-    private void ConfirmButton_Click(object? sender, EventArgs e)
+    private void UiClick_Confirm(object? sender, EventArgs e)
     {
         Suffix = m_oIncludeSuffixCheck.Checked ? FileNaming.SanitizeSuffix(m_oSuffixText.Text) : string.Empty;
         DialogResult = DialogResult.OK;

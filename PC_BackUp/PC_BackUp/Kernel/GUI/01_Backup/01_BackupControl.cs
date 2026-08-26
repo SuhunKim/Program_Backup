@@ -36,7 +36,7 @@ public partial class BackupControl : UserControlBase
                 : string.Join("  ·  ", errors);
     }
 
-    private async void BackupButton_Click(object? sender, EventArgs e)
+    private async void UiClick_Backup(object? sender, EventArgs e)
     {
         if (m_oSettingsService is null || m_oBackupService is null || m_bIsBusy) return;
 
@@ -90,7 +90,7 @@ public partial class BackupControl : UserControlBase
         }
     }
 
-    private void CancelButton_Click(object? sender, EventArgs e) => m_oCancellationTokenSource?.Cancel();
+    private void UiClick_Cancel(object? sender, EventArgs e) => m_oCancellationTokenSource?.Cancel();
 
     private void SetBusy(bool busy)
     {

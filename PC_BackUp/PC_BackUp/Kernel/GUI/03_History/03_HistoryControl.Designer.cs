@@ -156,7 +156,7 @@ partial class HistoryControl
         _sourceIsCurrentCheckBox.Width = 150;
         _sourceIsCurrentCheckBox.Checked = true;
         _sourceIsCurrentCheckBox.ForeColor = ColorRGB.Text;
-        _sourceIsCurrentCheckBox.CheckedChanged += SourceIsCurrentCheckBox_CheckedChanged;
+        _sourceIsCurrentCheckBox.CheckedChanged += UiChange_SourceIsCurrent;
         _sourceCombo.Dock = DockStyle.Fill;
         _sourceCombo.Height = 26;
         _sourceCombo.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -189,7 +189,7 @@ partial class HistoryControl
         _compareButton.Text = "XML 비교";
         _compareButton.Size = new Size(90, 32);
         _compareButton.Dock = DockStyle.Right;
-        _compareButton.Click += CompareButton_Click;
+        _compareButton.Click += UiClick_Compare;
         _logViewButton.ButtonType = StyledButtonType.Secondary;
         _logViewButton.Text = "작업 로그";
         _logViewButton.Dock = DockStyle.Right;
@@ -263,7 +263,7 @@ partial class HistoryControl
         _applyButton.Size = new Size(160, 42);
         _applyButton.Dock = DockStyle.Right;
         _applyButton.Enabled = false;
-        _applyButton.Click += ApplyButton_Click;
+        _applyButton.Click += UiClick_Apply;
         _progress.Dock = DockStyle.Top;
         _progress.Height = 6;
         bottomBar.Controls.Add(_summaryLabel);

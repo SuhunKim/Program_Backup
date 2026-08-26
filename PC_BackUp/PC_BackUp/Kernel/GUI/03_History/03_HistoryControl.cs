@@ -207,7 +207,7 @@ public partial class HistoryControl : UserControlBase
             : string.Format("{0:yyyy년 M월 d일} 로그 {1:N0}건", date, entries.Count);
     }
 
-    private async void CompareButton_Click(object? sender, EventArgs e)
+    private async void UiClick_Compare(object? sender, EventArgs e)
     {
         if (m_oSettingsService is null || m_oComparisonService is null || m_bIsBusy) return;
         if (_backupCombo.SelectedItem is not BackupRecord destinationRecord)
@@ -278,13 +278,13 @@ public partial class HistoryControl : UserControlBase
         _grid.Columns[3].HeaderText = string.Format("Destination ({0})", destinationLabel);
     }
 
-    private void SourceIsCurrentCheckBox_CheckedChanged(object? sender, EventArgs e)
+    private void UiChange_SourceIsCurrent(object? sender, EventArgs e)
     {
         _sourceCombo.Enabled = !_sourceIsCurrentCheckBox.Checked;
         UpdateApplyAvailability();
     }
 
-    private async void ApplyButton_Click(object? sender, EventArgs e)
+    private async void UiClick_Apply(object? sender, EventArgs e)
     {
         if (m_oSettingsService is null || m_oComparisonService is null || m_bIsBusy) return;
         if (!_sourceIsCurrentCheckBox.Checked)

@@ -301,7 +301,7 @@ public partial class SettingControl : UserControlBase
 		m_oStatusLabel.Text = string.Format("설정 파일: {0}", m_oSettingsService.SettingsFilePath);
 	}
 
-	private void SaveButton_Click(object? sender, EventArgs e)
+	private void UiClick_Save(object? sender, EventArgs e)
 	{
 		if (m_oSettingsService is null) return;
 		var settings = new AppSettings

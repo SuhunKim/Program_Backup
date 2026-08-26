@@ -114,7 +114,7 @@ public sealed class XmlComparisonService
                         progress?.Report((index + 1) * 100 / Math.Max(1, groups.Count));
                         continue;
                     }
-                    var temporaryPath = filePath + ".pcbackup.tmp";
+                    var temporaryPath = string.Format("{0}.pcbackup.tmp", filePath);
                     Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
                     File.WriteAllText(temporaryPath, backupXml, Encoding.UTF8);
                     File.Move(temporaryPath, filePath, true);
@@ -122,8 +122,9 @@ public sealed class XmlComparisonService
                     progress?.Report((index + 1) * 100 / Math.Max(1, groups.Count));
                 }
 
-                return OperationResult.Success(string.Format("선택 설정 적용 완료: {0}개", applied) +
-                    (skipped > 0 ? string.Format(" (적용 불가 {0}개)", skipped) : string.Empty));
+                return OperationResult.Success(skipped > 0
+                    ? string.Format("선택 설정 적용 완료: {0}개 (적용 불가 {1}개)", applied, skipped)
+                    : string.Format("선택 설정 적용 완료: {0}개", applied));
             }, cancellationToken);
         }
         catch (OperationCanceledException)
@@ -161,7 +162,7 @@ public sealed class XmlComparisonService
             var fullPath = Path.GetFullPath(file);
             if (!string.IsNullOrEmpty(normalizedBackupRoot) &&
                 (fullPath.Equals(normalizedBackupRoot, StringComparison.OrdinalIgnoreCase) ||
-                 fullPath.StartsWith(normalizedBackupRoot + Path.DirectorySeparatorChar,
+                 fullPath.StartsWith(string.Format("{0}{1}", normalizedBackupRoot, Path.DirectorySeparatorChar),
                      StringComparison.OrdinalIgnoreCase)))
                 continue;
             documents[Path.GetRelativePath(sourceRoot, file)] = File.ReadAllText(file);
@@ -269,7 +270,7 @@ public sealed class XmlComparisonService
     private static void EnsureChildPath(string candidate, string parent)
     {
         var normalizedParent = Path.TrimEndingDirectorySeparator(Path.GetFullPath(parent));
-        if (!candidate.StartsWith(normalizedParent + Path.DirectorySeparatorChar,
+        if (!candidate.StartsWith(string.Format("{0}{1}", normalizedParent, Path.DirectorySeparatorChar),
                 StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("설정 파일 경로가 대상 폴더를 벗어났습니다.");
     }

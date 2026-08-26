@@ -217,7 +217,7 @@ public partial class RecoveryControl : UserControlBase
 	/// 환경설정 화면에는 더 이상 이 옵션이 없으므로, 복원 화면에서 체크박스를 바꾸는 즉시 저장한다.
 	/// RefreshCatalog()가 저장된 값을 반영할 때는 값이 그대로라 이벤트가 실행 취소되지 않는다.
 	/// </summary>
-	private void AutoSafetyBackupCheckBox_CheckedChanged(object? sender, EventArgs e)
+	private void UiChange_AutoSafetyBackup(object? sender, EventArgs e)
 	{
 		if (m_oSettingsService is null) return;
 		var settings = m_oSettingsService.Load();
@@ -239,7 +239,7 @@ public partial class RecoveryControl : UserControlBase
 	/// 위 자동 안전 백업 체크박스와 동일하게, 복원 화면에서 바꾸는 즉시 저장한다.
 	/// 미체크(기본값)면 비교 없이 바로 덮어쓰고, 체크하면 비교 후 확인을 거쳐 복원한다.
 	/// </summary>
-	private void CompareBeforeRestoreCheckBox_CheckedChanged(object? sender, EventArgs e)
+	private void UiChange_CompareBeforeRestore(object? sender, EventArgs e)
 	{
 		if (m_oSettingsService is null) return;
 		var settings = m_oSettingsService.Load();
@@ -277,7 +277,7 @@ public partial class RecoveryControl : UserControlBase
 		UpdateSelectedBackupDetails();
 	}
 
-	private async void RestoreButton_Click(object? sender, EventArgs e)
+	private async void UiClick_Restore(object? sender, EventArgs e)
 	{
         if (m_oSettingsService is null || m_oRecoveryService is null || m_oBackupComparisonService is null || m_bIsBusy) return;
 		if (_grid.CurrentRow?.DataBoundItem is not BackupRecord record)

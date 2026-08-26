@@ -146,14 +146,14 @@ partial class BackupControl
         backupButton.Text = "백업 시작";
         backupButton.Dock = DockStyle.Right;
         backupButton.Width = 160;
-        backupButton.Click += BackupButton_Click;
+        backupButton.Click += UiClick_Backup;
         cancelButton.ButtonType = StyledButtonType.Secondary;
         cancelButton.Text = "취소";
         cancelButton.Dock = DockStyle.Right;
         cancelButton.Width = 100;
         cancelButton.Margin = new Padding(0, 0, 10, 0);
         cancelButton.Visible = false;
-        cancelButton.Click += CancelButton_Click;
+        cancelButton.Click += UiClick_Cancel;
         statusLabel.Text = "환경 설정을 확인한 뒤 백업을 시작하세요.";
         statusLabel.Dock = DockStyle.Fill;
         statusLabel.ForeColor = ColorRGB.MutedText;

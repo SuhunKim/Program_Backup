@@ -230,7 +230,7 @@ partial class SettingControl
         saveButton.Dock = DockStyle.Right;
         saveButton.Width = 140;
         saveButton.Height = 42;
-        saveButton.Click += SaveButton_Click;
+        saveButton.Click += UiClick_Save;
         m_oStatusLabel.Dock = DockStyle.Fill;
         m_oStatusLabel.ForeColor = ColorRGB.MutedText;
         m_oStatusLabel.TextAlign = ContentAlignment.MiddleLeft;

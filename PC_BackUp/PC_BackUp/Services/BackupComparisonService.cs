@@ -26,7 +26,7 @@ public sealed class BackupComparisonService
         var sBackupRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(sBackupRootPath));
         var oCurrentFiles = Directory.Exists(sCurrentRoot)
             ? Directory.EnumerateFiles(sCurrentRoot, "*", SearchOption.AllDirectories)
-                .Where(sFile => !Path.GetFullPath(sFile).StartsWith(sBackupRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                .Where(sFile => !Path.GetFullPath(sFile).StartsWith(string.Format("{0}{1}", sBackupRoot, Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
                 .ToDictionary(sFile => Path.GetRelativePath(sCurrentRoot, sFile), StringComparer.OrdinalIgnoreCase)
             : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var oResults = new List<BackupFileDifference>();

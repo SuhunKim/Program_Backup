@@ -60,7 +60,7 @@ public sealed class XmlSettingsService : ISettingsService
             ?? throw new InvalidOperationException("Config 폴더 경로를 확인할 수 없습니다.");
         Directory.CreateDirectory(configFolder);
 
-        var temporaryPath = SettingsFilePath + ".tmp";
+        var temporaryPath = string.Format("{0}.tmp", SettingsFilePath);
         try
         {
             var writerSettings = new XmlWriterSettings

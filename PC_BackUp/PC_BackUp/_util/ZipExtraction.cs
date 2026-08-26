@@ -17,7 +17,7 @@ internal static class ZipExtraction
         {
             var targetPath = Path.GetFullPath(Path.Combine(normalizedRoot, entry.FullName));
             if (!targetPath.Equals(normalizedRoot, StringComparison.OrdinalIgnoreCase) &&
-                !targetPath.StartsWith(normalizedRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                !targetPath.StartsWith(string.Format("{0}{1}", normalizedRoot, Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException(string.Format("백업 zip에 대상 폴더를 벗어나는 항목이 있습니다: {0}", entry.FullName));
 
             // 디렉터리 엔트리(zip 안에서 이름이 '/' 또는 '\'로 끝나는 항목)는 폴더만 만들고 넘어간다.

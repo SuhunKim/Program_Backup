@@ -187,13 +187,13 @@ partial class RecoveryControl
         _autoSafetyBackupCheckBox.Height = 26;
         _autoSafetyBackupCheckBox.ForeColor = ColorRGB.Text;
         _autoSafetyBackupCheckBox.Checked = false;
-        _autoSafetyBackupCheckBox.CheckedChanged += AutoSafetyBackupCheckBox_CheckedChanged;
+        _autoSafetyBackupCheckBox.CheckedChanged += UiChange_AutoSafetyBackup;
         _compareBeforeRestoreCheckBox.Text = "복원 전 현재 파일과 비교";
         _compareBeforeRestoreCheckBox.Dock = DockStyle.Top;
         _compareBeforeRestoreCheckBox.Height = 26;
         _compareBeforeRestoreCheckBox.ForeColor = ColorRGB.Text;
         _compareBeforeRestoreCheckBox.Checked = false;
-        _compareBeforeRestoreCheckBox.CheckedChanged += CompareBeforeRestoreCheckBox_CheckedChanged;
+        _compareBeforeRestoreCheckBox.CheckedChanged += UiChange_CompareBeforeRestore;
         selectedBackupCardPanel.Controls.Add(_autoSafetyBackupCheckBox);
         selectedBackupCardPanel.Controls.Add(_compareBeforeRestoreCheckBox);
         selectedBackupCardPanel.Controls.Add(_comparisonListBox);
@@ -229,7 +229,7 @@ partial class RecoveryControl
         _restoreButton.Width = 180;
         _restoreButton.Height = 42;
         _restoreButton.Dock = DockStyle.Right;
-        _restoreButton.Click += RestoreButton_Click;
+        _restoreButton.Click += UiClick_Restore;
         actionPanel.Controls.Add(_cancelButton);
         actionPanel.Controls.Add(_restoreButton);
         actionPanel.Controls.Add(_progress);

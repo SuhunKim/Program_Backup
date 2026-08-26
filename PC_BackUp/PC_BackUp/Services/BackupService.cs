@@ -35,7 +35,7 @@ public sealed class BackupService
                 Directory.CreateDirectory(backupRoot);
 
                 var baseName = ResolveAvailableBaseName(backupRoot, kind, suffix);
-                var destination = Path.Combine(backupRoot, baseName + SuffixFor(kind));
+                var destination = Path.Combine(backupRoot, string.Format("{0}{1}", baseName, SuffixFor(kind)));
 
                 var selectiveFolderNames = settings.GetSelectiveFolderNames();
                 if (kind == BackupKind.SelectiveFolders)
@@ -75,7 +75,7 @@ public sealed class BackupService
     public static string PreviewFileName(string nameSuffix, BackupKind kind)
     {
         var suffix = FileNaming.SanitizeSuffix(nameSuffix);
-        return BuildBaseName(DateTime.Now, suffix, 0) + SuffixFor(kind);
+        return string.Format("{0}{1}", BuildBaseName(DateTime.Now, suffix, 0), SuffixFor(kind));
     }
 
     /// <summary>
@@ -105,7 +105,7 @@ public sealed class BackupService
         for (var counter = 0; counter <= MaxNameCollisionRetries; counter++)
         {
             var baseName = BuildBaseName(now, suffix, counter);
-            var candidate = Path.Combine(backupRoot, baseName + kindSuffix);
+            var candidate = Path.Combine(backupRoot, string.Format("{0}{1}", baseName, kindSuffix));
             if (!File.Exists(candidate) && !Directory.Exists(candidate))
                 return baseName;
         }
@@ -221,7 +221,7 @@ public sealed class BackupService
         var normalizedCandidate = Path.TrimEndingDirectorySeparator(Path.GetFullPath(candidate));
         var normalizedParent = Path.TrimEndingDirectorySeparator(Path.GetFullPath(parent));
         return normalizedCandidate.Equals(normalizedParent, StringComparison.OrdinalIgnoreCase) ||
-               normalizedCandidate.StartsWith(normalizedParent + Path.DirectorySeparatorChar,
+               normalizedCandidate.StartsWith(string.Format("{0}{1}", normalizedParent, Path.DirectorySeparatorChar),
                    StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -154,7 +154,7 @@ public sealed class RecoveryService
     private static void EnsureChildPath(string candidate, string parent)
     {
         var normalizedParent = Path.TrimEndingDirectorySeparator(Path.GetFullPath(parent));
-        if (!candidate.StartsWith(normalizedParent + Path.DirectorySeparatorChar,
+        if (!candidate.StartsWith(string.Format("{0}{1}", normalizedParent, Path.DirectorySeparatorChar),
                 StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("백업에 대상 경로를 벗어나는 파일이 포함되어 있습니다.");
     }
