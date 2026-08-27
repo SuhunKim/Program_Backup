@@ -132,6 +132,11 @@ public sealed class RecoveryService
         IProgress<int>? progress,
         CancellationToken cancellationToken)
     {
+        // IgnoreInaccessible을 의도적으로 false로 둔다 — BackupService/XmlComparisonService/
+        // BackupComparisonService는 "지금 실행 중인 소스 트리"를 읽어서 일시적 잠금/권한 문제를
+        // 건너뛰고 계속 진행해도 되지만, 여기 sourceRoot는 이미 해제된 백업(임시 폴더 또는
+        // 백업이 폴더 형태인 경우 그 폴더)이라 접근 불가 항목이 있다면 복원이 일부만 적용된
+        // 상태로 조용히 끝나는 쪽이 더 위험하다. 실패를 그대로 드러내 호출자가 알게 한다.
         var files = Directory.EnumerateFiles(sourceRoot, "*", new EnumerationOptions
         {
             RecurseSubdirectories = true,

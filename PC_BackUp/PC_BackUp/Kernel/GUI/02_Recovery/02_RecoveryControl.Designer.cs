@@ -13,10 +13,10 @@ partial class RecoveryControl
     private Panel headerPanel = null!;
     private Label headerTitleLabel = null!;
     private Label headerDescriptionLabel = null!;
-    private Panel workspace = null!;
+    private CardPanel workspace = null!;
     private Label calendarTitle = null!;
     private Panel detailsPanel = null!;
-    private Panel selectedBackupCardPanel = null!;
+    private CardPanel selectedBackupCardPanel = null!;
     private Panel detailsGap = null!;
     private Panel actionPanel = null!;
 
@@ -59,11 +59,11 @@ partial class RecoveryControl
         headerPanel = new Panel();
         headerTitleLabel = new Label();
         headerDescriptionLabel = new Label();
-        workspace = new Panel();
+        workspace = new CardPanel();
         _workspaceSplit = new SplitContainer();
         calendarTitle = new Label();
         detailsPanel = new Panel();
-        selectedBackupCardPanel = new Panel();
+        selectedBackupCardPanel = new CardPanel();
         detailsGap = new Panel();
         actionPanel = new Panel();
         _restoreButton = new PC_BackUp.StyledButton();

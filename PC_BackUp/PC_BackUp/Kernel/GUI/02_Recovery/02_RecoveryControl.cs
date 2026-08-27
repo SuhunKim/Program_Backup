@@ -7,8 +7,8 @@ public partial class RecoveryControl : UserControlBase
 	private ISettingsService? m_oSettingsService;
 	private BackupCatalogService? m_oCatalogService;
 	private RecoveryService? m_oRecoveryService;
-    private BackupService? m_oBackupService;
-    private BackupComparisonService? m_oBackupComparisonService;
+	private BackupService? m_oBackupService;
+	private BackupComparisonService? m_oBackupComparisonService;
 	private LogManager? m_oLoggingService;
 	private bool m_bIsBusy;
 	private CancellationTokenSource? m_oCancellationTokenSource;
@@ -22,7 +22,6 @@ public partial class RecoveryControl : UserControlBase
 		// 아이콘 배지(IconGlyphs)는 GDI+ Paint 이벤트로 그려서 디자이너가 표현할 수 없는
 		// 부분이라, 디자이너가 그려둔 고정 골격(workspace/detailsPanel)에 여기서 덧붙인다.
 
-		//추가
 		_grid.DataBindingComplete += (_, _) =>
 		{
 			_emptyLabel.Visible = _grid.Rows.Count == 0;
@@ -33,10 +32,6 @@ public partial class RecoveryControl : UserControlBase
 
 		_cancelButton.Click += (_, _) => m_oCancellationTokenSource?.Cancel();
 		_calendar.DateSelected += (_, eventArgs) => LoadDate(eventArgs.Start);
-
-
-
-
 
 		workspace.Controls.Add(BuildSummaryRow());
 		var safetyInfoCard = BuildSafetyInfoCard();
@@ -54,16 +49,16 @@ public partial class RecoveryControl : UserControlBase
 	public RecoveryControl(
 			ISettingsService settingsService,
 			BackupCatalogService catalogService,
-        RecoveryService recoveryService,
-        BackupService backupService,
-        BackupComparisonService backupComparisonService,
-        LogManager loggingService) : this()
+			RecoveryService recoveryService,
+			BackupService backupService,
+			BackupComparisonService backupComparisonService,
+			LogManager loggingService) : this()
 	{
 		m_oSettingsService = settingsService;
 		m_oCatalogService = catalogService;
 		m_oRecoveryService = recoveryService;
-        m_oBackupService = backupService;
-        m_oBackupComparisonService = backupComparisonService;
+		m_oBackupService = backupService;
+		m_oBackupComparisonService = backupComparisonService;
 		m_oLoggingService = loggingService;
 	}
 
@@ -100,8 +95,7 @@ public partial class RecoveryControl : UserControlBase
 	/// <summary>안전한 복원을 위한 안내 — 체크 아이콘을 코드로 그려야 해서 디자이너로 옮기지 못했다.</summary>
 	private static Control BuildSafetyInfoCard()
 	{
-		var card = new Panel { BackColor = ColorRGB.SafetyBackground, Padding = new Padding(14, 10, 14, 10) };
-		card.Paint += (_, e) => e.Graphics.DrawRectangle(new Pen(ColorRGB.SafetyBorder), 0, 0, card.Width - 1, card.Height - 1);
+		var card = new CardPanel { BackColor = ColorRGB.SafetyBackground, BorderColor = ColorRGB.SafetyBorder, Padding = new Padding(14, 10, 14, 10) };
 
 		var titleRow = new Panel { Dock = DockStyle.Top, Height = 24 };
 		var titleIcon = IconGlyphs.CreateBadge(20, ColorRGB.SafetyIcon, Color.White, IconGlyphs.Check);
@@ -263,12 +257,12 @@ public partial class RecoveryControl : UserControlBase
 	{
 		if (m_oCatalogService is null) return;
 		_dateLabel.Text = string.Format("{0:yyyy년 M월 d일} 백업 목록", date);
-        var records = m_oCatalogService.GetByDate(date).ToList();
-        _grid.DataSource = records;
-        _emptyLabel.Text = records.Count == 0
-            ? "선택한 날짜에는 복원 가능한 백업 자료가 없습니다."
-            : string.Empty;
-        _emptyLabel.Visible = _grid.Rows.Count == 0;
+		var records = m_oCatalogService.GetByDate(date).ToList();
+		_grid.DataSource = records;
+		_emptyLabel.Text = records.Count == 0
+			? "선택한 날짜에는 복원 가능한 백업 자료가 없습니다."
+			: string.Empty;
+		_emptyLabel.Visible = _grid.Rows.Count == 0;
 
 		_summaryDateValue.Text = string.Format("{0:yyyy년 M월 d일}", date);
 		var totalBytes = records.Sum(record => record.SizeBytes);
@@ -279,94 +273,128 @@ public partial class RecoveryControl : UserControlBase
 
 	private async void UiClick_Restore(object? sender, EventArgs e)
 	{
-        if (m_oSettingsService is null || m_oRecoveryService is null || m_oBackupComparisonService is null || m_bIsBusy) return;
+		if (m_oSettingsService is null || m_oRecoveryService is null || m_oBackupComparisonService is null || m_bIsBusy) return;
 		if (_grid.CurrentRow?.DataBoundItem is not BackupRecord record)
 			return;
 
-        var settings = m_oSettingsService.Load();
-        string confirmMessageText;
+		var settings = m_oSettingsService.Load();
 
-        if (_compareBeforeRestoreCheckBox.Checked)
-        {
-            // 비교 후 복원: 현재 파일과 백업을 먼저 비교해서 무엇이 바뀌는지 보여준 뒤 확인받는다.
-            m_bIsBusy = true;
-            _restoreButton.Enabled = false;
-            _cancelButton.Visible = true;
-            m_oCancellationTokenSource = new CancellationTokenSource();
-            IReadOnlyList<BackupFileDifference> differences;
-            try
-            {
-                var progress = new Progress<int>(value => _progress.Value = value);
-                _selectedBackupMetaLabel.Text = "복원 전 변경사항을 확인하고 있습니다...";
-                var comparison = await m_oBackupComparisonService.CompareAsync(record, settings, progress, m_oCancellationTokenSource.Token);
-                if (comparison.IsCanceled)
-                {
-                    _selectedBackupMetaLabel.Text = "복원 전 비교를 취소했습니다.";
-                    _comparisonResultLabel.Text = string.Empty;
-                    _comparisonListBox.Items.Clear();
-                    return;
-                }
+		// 확인 메시지 조립(비교 후 복원 / 비교 없이 바로 덮어쓰기) — 비교 모드에서 취소되었거나
+		// 변경사항이 없으면 null을 반환해 여기서 그대로 끝낸다.
+		var confirmMessageText = _compareBeforeRestoreCheckBox.Checked
+			? await BuildCompareConfirmMessageAsync(record, settings)
+			: BuildDirectOverwriteConfirmMessage(record, settings);
+		if (confirmMessageText is null)
+			return;
 
-                differences = comparison.Differences;
-                if (differences.Count == 0)
-                {
-                    _selectedBackupMetaLabel.Text = "변경사항 없음 — 복원할 내용이 없습니다.";
-                    _comparisonResultLabel.Text = "백업과 현재 파일은 동일합니다.";
-                    _comparisonListBox.Items.Clear();
-                    return;
-                }
-
-                _selectedBackupMetaLabel.Text = string.Format("복원 전 비교 완료: 변경 {0}개", differences.Count);
-                _comparisonListBox.Items.Clear();
-                foreach (var difference in differences)
-                    _comparisonListBox.Items.Add(string.Format("{0}: {1}", difference.Status, difference.RelativePath));
-            }
-            finally
-            {
-                m_bIsBusy = false;
-                _cancelButton.Visible = false;
-                _progress.Value = 0;
-                m_oCancellationTokenSource?.Dispose();
-                m_oCancellationTokenSource = null;
-                _restoreButton.Enabled = _grid.Rows.Count > 0;
-            }
-
-            // 대상 위치에 없는 파일(백업에만 있음)은 내용 비교가 불가능해 그대로 복사될 수밖에 없으므로,
-            // 몇 개나 새로 생성되는지 미리 알려준 뒤 덮어쓸지 확인받는다.
-            var missingCount = differences.Count(difference => difference.Status == "백업에만 있음");
-            var changedCount = differences.Count(difference => difference.Status == "내용 변경");
-            var extraCount = differences.Count(difference => difference.Status == "현재에만 있음");
-
-            var confirmMessage = new System.Text.StringBuilder()
-                .AppendLine(string.Format("'{0}' 백업을 다음 위치에 복원합니다.", record.FileName))
-                .AppendLine()
-                .AppendLine(settings.GetSourceRoot())
-                .AppendLine();
-            if (missingCount > 0)
-                confirmMessage.AppendLine(string.Format("- 대상 위치에 없는 파일 {0}개: 비교할 수 없어 그대로 복사됩니다.", missingCount));
-            if (changedCount > 0)
-                confirmMessage.AppendLine(string.Format("- 내용이 다른 파일 {0}개: 백업 내용으로 덮어씁니다.", changedCount));
-            if (extraCount > 0)
-                confirmMessage.AppendLine(string.Format("- 백업에 없는 파일 {0}개: 삭제하지 않고 그대로 둡니다.", extraCount));
-            confirmMessage.AppendLine().Append("계속할까요?");
-            confirmMessageText = confirmMessage.ToString();
-        }
-        else
-        {
-            // 비교 없이 바로 덮어쓰기(기본값): 있든 없든 백업의 모든 파일로 그대로 덮어쓴다.
-            _selectedBackupMetaLabel.Text = "비교를 생략하고 전체 파일을 덮어씁니다.";
-            _comparisonResultLabel.Text = "비교 없이 백업 내용으로 전체 덮어씁니다.";
-            _comparisonListBox.Items.Clear();
-            confirmMessageText = string.Format(
-                "'{0}' 백업을 다음 위치에 덮어씁니다.\n\n{1}\n\n비교 없이 백업의 모든 파일로 덮어씁니다.\n계속할까요?",
-                record.FileName, settings.GetSourceRoot());
-        }
-
-        var confirm = MessageBox.Show(this,
+		var confirm = MessageBox.Show(this,
 				confirmMessageText,
 				"복원 확인", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
 		if (confirm != DialogResult.Yes)
 			return;
+
+		if (!await EnsureTargetProcessesStoppedAsync(settings))
+			return;
+
+		await RunRestoreAsync(record, settings);
+	}
+
+	/// <summary>
+	/// 비교 후 복원 모드: 현재 파일과 백업을 먼저 비교해서 무엇이 바뀌는지 보여준 뒤 확인 메시지를
+	/// 만든다. 비교가 취소되었거나 변경사항이 없으면 null을 반환해 호출자가 복원을 진행하지 않고
+	/// 그대로 끝내게 한다.
+	/// </summary>
+	private async Task<string?> BuildCompareConfirmMessageAsync(BackupRecord record, AppSettings settings)
+	{
+		if (m_oBackupComparisonService is null) return null;
+
+		m_bIsBusy = true;
+		_restoreButton.Enabled = false;
+		_cancelButton.Visible = true;
+		m_oCancellationTokenSource = new CancellationTokenSource();
+		IReadOnlyList<BackupFileDifference> differences;
+		try
+		{
+			var progress = new Progress<int>(value => _progress.Value = value);
+			_selectedBackupMetaLabel.Text = "복원 전 변경사항을 확인하고 있습니다...";
+			var comparison = await m_oBackupComparisonService.CompareAsync(record, settings, progress, m_oCancellationTokenSource.Token);
+			if (comparison.IsCanceled)
+			{
+				_selectedBackupMetaLabel.Text = "복원 전 비교를 취소했습니다.";
+				_comparisonResultLabel.Text = string.Empty;
+				_comparisonListBox.Items.Clear();
+				return null;
+			}
+
+			differences = comparison.Differences;
+			if (differences.Count == 0)
+			{
+				_selectedBackupMetaLabel.Text = "변경사항 없음 — 복원할 내용이 없습니다.";
+				_comparisonResultLabel.Text = "백업과 현재 파일은 동일합니다.";
+				_comparisonListBox.Items.Clear();
+				return null;
+			}
+
+			_selectedBackupMetaLabel.Text = string.Format("복원 전 비교 완료: 변경 {0}개", differences.Count);
+			_comparisonListBox.Items.Clear();
+			foreach (var difference in differences)
+				_comparisonListBox.Items.Add(string.Format("{0}: {1}", difference.Status, difference.RelativePath));
+		}
+		catch (Exception exception)
+		{
+			// BackupComparisonService.CompareAsync는 취소 외의 예외를 그대로 전파하므로 여기서 받아
+			// 처리한다 — 그렇지 않으면 async void 이벤트 핸들러를 타고 올라가 전역 예외 처리기까지
+			// 가게 되어 다른 화면들과 달리 "복원 실패" 안내 없이 거칠게 실패한다.
+			m_oLoggingService?.LogError("복원 전 비교 중 예외가 발생했습니다.", exception);
+			MessageBox.Show(this, exception.Message, "복원 실패", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			return null;
+		}
+		finally
+		{
+			m_bIsBusy = false;
+			_cancelButton.Visible = false;
+			_progress.Value = 0;
+			m_oCancellationTokenSource?.Dispose();
+			m_oCancellationTokenSource = null;
+			_restoreButton.Enabled = _grid.Rows.Count > 0;
+		}
+
+		// 대상 위치에 없는 파일(백업에만 있음)은 내용 비교가 불가능해 그대로 복사될 수밖에 없으므로,
+		// 몇 개나 새로 생성되는지 미리 알려준 뒤 덮어쓸지 확인받는다.
+		var missingCount = differences.Count(difference => difference.Status == "백업에만 있음");
+		var changedCount = differences.Count(difference => difference.Status == "내용 변경");
+		var extraCount = differences.Count(difference => difference.Status == "현재에만 있음");
+
+		var confirmMessage = new System.Text.StringBuilder()
+			.AppendLine(string.Format("'{0}' 백업을 다음 위치에 복원합니다.", record.FileName))
+			.AppendLine()
+			.AppendLine(settings.GetSourceRoot())
+			.AppendLine();
+		if (missingCount > 0)
+			confirmMessage.AppendLine(string.Format("- 대상 위치에 없는 파일 {0}개: 비교할 수 없어 그대로 복사됩니다.", missingCount));
+		if (changedCount > 0)
+			confirmMessage.AppendLine(string.Format("- 내용이 다른 파일 {0}개: 백업 내용으로 덮어씁니다.", changedCount));
+		if (extraCount > 0)
+			confirmMessage.AppendLine(string.Format("- 백업에 없는 파일 {0}개: 삭제하지 않고 그대로 둡니다.", extraCount));
+		confirmMessage.AppendLine().Append("계속할까요?");
+		return confirmMessage.ToString();
+	}
+
+	/// <summary>비교 없이 바로 덮어쓰기(기본값): 있든 없든 백업의 모든 파일로 그대로 덮어쓴다.</summary>
+	private string BuildDirectOverwriteConfirmMessage(BackupRecord record, AppSettings settings)
+	{
+		_selectedBackupMetaLabel.Text = "비교를 생략하고 전체 파일을 덮어씁니다.";
+		_comparisonResultLabel.Text = "비교 없이 백업 내용으로 전체 덮어씁니다.";
+		_comparisonListBox.Items.Clear();
+		return string.Format(
+			"'{0}' 백업을 다음 위치에 덮어씁니다.\n\n{1}\n\n비교 없이 백업의 모든 파일로 덮어씁니다.\n계속할까요?",
+			record.FileName, settings.GetSourceRoot());
+	}
+
+	/// <summary>실행 중인 대상 프로그램이 있으면 종료 확인 후 종료한다. 복원을 계속 진행해도 되면 true.</summary>
+	private async Task<bool> EnsureTargetProcessesStoppedAsync(AppSettings settings)
+	{
+		if (m_oRecoveryService is null) return false;
 
 		IReadOnlyList<System.Diagnostics.Process> running;
 		try
@@ -377,55 +405,47 @@ public partial class RecoveryControl : UserControlBase
 		{
 			m_oLoggingService?.LogError("실행 중인 대상 프로그램을 확인하지 못했습니다.", exception);
 			MessageBox.Show(this, exception.Message, "복원 중단", MessageBoxButtons.OK, MessageBoxIcon.Error);
-			return;
+			return false;
 		}
 
-		if (running.Count > 0)
+		if (running.Count == 0)
+			return true;
+
+		var close = MessageBox.Show(this,
+				string.Format("대상 프로그램이 {0}개 실행 중입니다. 종료한 뒤 복원할까요?", running.Count),
+				"프로그램 실행 중", MessageBoxButtons.YesNo, MessageBoxIcon.Question,
+				MessageBoxDefaultButton.Button2);
+		if (close != DialogResult.Yes)
 		{
-			var close = MessageBox.Show(this,
-					string.Format("대상 프로그램이 {0}개 실행 중입니다. 종료한 뒤 복원할까요?", running.Count),
-					"프로그램 실행 중", MessageBoxButtons.YesNo, MessageBoxIcon.Question,
-					MessageBoxDefaultButton.Button2);
-			if (close != DialogResult.Yes)
-			{
-				foreach (var process in running) process.Dispose();
-				return;
-			}
-
-			var stopResult = await m_oRecoveryService.StopProcessesAsync(running);
-			if (!stopResult.Succeeded)
-			{
-				MessageBox.Show(this, stopResult.Message, "복원 중단", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-				return;
-			}
+			foreach (var process in running) process.Dispose();
+			return false;
 		}
 
-        m_bIsBusy = true;
+		var stopResult = await m_oRecoveryService.StopProcessesAsync(running);
+		if (!stopResult.Succeeded)
+		{
+			MessageBox.Show(this, stopResult.Message, "복원 중단", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			return false;
+		}
+		return true;
+	}
+
+	/// <summary>필요하면 복원 전 자동 안전 백업을 실행하고, 이어서 실제 복원을 실행한다.</summary>
+	private async Task RunRestoreAsync(BackupRecord record, AppSettings settings)
+	{
+		if (m_oRecoveryService is null) return;
+
+		m_bIsBusy = true;
 		_restoreButton.Enabled = false;
 		_cancelButton.Visible = true;
 		_progress.Value = 0;
 		m_oCancellationTokenSource = new CancellationTokenSource();
 		try
 		{
-			if (_autoSafetyBackupCheckBox.Checked && m_oBackupService is not null)
+			if (_autoSafetyBackupCheckBox.Checked && m_oBackupService is not null &&
+				!await RunAutoSafetyBackupAsync(settings))
 			{
-				var safety = await m_oBackupService.CreateAsync(settings, BackupKind.FullZip, "autosafety", null, m_oCancellationTokenSource.Token);
-				if (safety.Result.Succeeded)
-				{
-					m_oLoggingService?.LogInfo(string.Format("복원 전 자동 안전 백업 완료: {0}", safety.Record?.FileName));
-				}
-				else
-				{
-					m_oLoggingService?.LogError(string.Format("복원 전 자동 안전 백업 실패: {0}", safety.Result.Message));
-					var continueAnyway = MessageBox.Show(this,
-							string.Format("복원 전 자동 안전 백업에 실패했습니다.\n{0}\n\n안전 백업 없이 복원을 계속할까요?", safety.Result.Message),
-							"자동 안전 백업 실패", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
-					if (continueAnyway != DialogResult.Yes)
-					{
-						_progress.Value = 0;
-						return;
-					}
-				}
+				return;
 			}
 
 			var progress = new Progress<int>(value => _progress.Value = value);
@@ -451,6 +471,31 @@ public partial class RecoveryControl : UserControlBase
 			m_oCancellationTokenSource?.Dispose();
 			m_oCancellationTokenSource = null;
 		}
+	}
+
+	/// <summary>
+	/// 복원 전 자동 안전 백업을 실행한다. 실패하면 안전 백업 없이 계속할지 확인받고,
+	/// 계속 진행해도 되면(백업 성공 또는 사용자가 계속을 선택) true를 반환한다.
+	/// </summary>
+	private async Task<bool> RunAutoSafetyBackupAsync(AppSettings settings)
+	{
+		var safety = await m_oBackupService!.CreateAsync(settings, BackupKind.FullZip, "autosafety", null, m_oCancellationTokenSource!.Token);
+		if (safety.Result.Succeeded)
+		{
+			m_oLoggingService?.LogInfo(string.Format("복원 전 자동 안전 백업 완료: {0}", safety.Record?.FileName));
+			return true;
+		}
+
+		m_oLoggingService?.LogError(string.Format("복원 전 자동 안전 백업 실패: {0}", safety.Result.Message));
+		var continueAnyway = MessageBox.Show(this,
+				string.Format("복원 전 자동 안전 백업에 실패했습니다.\n{0}\n\n안전 백업 없이 복원을 계속할까요?", safety.Result.Message),
+				"자동 안전 백업 실패", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+		if (continueAnyway != DialogResult.Yes)
+		{
+			_progress.Value = 0;
+			return false;
+		}
+		return true;
 	}
 
 	private void UpdateSelectedBackupDetails()

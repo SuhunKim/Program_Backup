@@ -5,15 +5,29 @@ namespace PC_BackUp.Services;
 
 public sealed partial class BackupCatalogService
 {
-    private readonly Dictionary<DateTime, List<BackupRecord>> m_oRecordsByDate = new();
+    // 여러 화면(01~04)이 이 서비스 인스턴스 하나를 공유하고, 01 화면의 백업 실행은
+    // 백그라운드 스레드(Task.Run)에서 Refresh()를 호출하는 동안 다른 화면은 UI 스레드에서
+    // 동시에 Refresh()/GetByDate()/GetAll()을 호출할 수 있다(예: 백업 진행 중 탭 전환).
+    // Dictionary는 동시 읽기/쓰기에 안전하지 않으므로, 기존 딕셔너리를 제자리에서
+    // Clear()+Add()로 고치는 대신 새 딕셔너리를 다 만든 뒤 필드를 한 번에 교체하는
+    // copy-on-write 방식을 쓴다. 참조 대입은 원자적이라 읽는 쪽(GetAll/GetByDate/
+    // RecordsByDate)은 락 없이 항상 교체 전후 어느 한쪽의 완전한 딕셔너리만 보게 된다.
+    // m_oRefreshLock은 Refresh() 호출 두 개가 겹칠 때 필드 교체 순서만 직렬화한다.
+    private readonly object m_oRefreshLock = new();
+    private volatile Dictionary<DateTime, List<BackupRecord>> m_oRecordsByDate = new();
 
     public IReadOnlyDictionary<DateTime, List<BackupRecord>> RecordsByDate => m_oRecordsByDate;
 
     public IReadOnlyDictionary<DateTime, List<BackupRecord>> Refresh(string backupRootPath)
     {
-        m_oRecordsByDate.Clear();
+        var newRecordsByDate = new Dictionary<DateTime, List<BackupRecord>>();
+
         if (string.IsNullOrWhiteSpace(backupRootPath) || !Directory.Exists(backupRootPath))
+        {
+            lock (m_oRefreshLock)
+                m_oRecordsByDate = newRecordsByDate;
             return RecordsByDate;
+        }
 
         foreach (var path in Directory.EnumerateFileSystemEntries(backupRootPath, "*", SearchOption.TopDirectoryOnly))
         {
@@ -21,7 +35,7 @@ public sealed partial class BackupCatalogService
             if (!TryParseBackupFileName(name, out var createdAt, out var kind))
                 continue;
 
-            Add(new BackupRecord
+            Add(newRecordsByDate, new BackupRecord
             {
                 CreatedAt = createdAt,
                 Kind = kind,
@@ -31,9 +45,11 @@ public sealed partial class BackupCatalogService
             });
         }
 
-        foreach (var records in m_oRecordsByDate.Values)
+        foreach (var records in newRecordsByDate.Values)
             records.Sort((left, right) => right.CreatedAt.CompareTo(left.CreatedAt));
 
+        lock (m_oRefreshLock)
+            m_oRecordsByDate = newRecordsByDate;
         return RecordsByDate;
     }
 
@@ -47,13 +63,13 @@ public sealed partial class BackupCatalogService
         .OrderByDescending(record => record.CreatedAt)
         .ToList();
 
-    private void Add(BackupRecord record)
+    private static void Add(Dictionary<DateTime, List<BackupRecord>> recordsByDate, BackupRecord record)
     {
         var date = record.CreatedAt.Date;
-        if (!m_oRecordsByDate.TryGetValue(date, out var records))
+        if (!recordsByDate.TryGetValue(date, out var records))
         {
             records = new List<BackupRecord>();
-            m_oRecordsByDate.Add(date, records);
+            recordsByDate.Add(date, records);
         }
         records.Add(record);
     }

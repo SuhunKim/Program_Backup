@@ -10,12 +10,15 @@ partial class BackupControl
     private Panel headerPanel = null!;
     private Label headerTitleLabel = null!;
     private Label headerDescriptionLabel = null!;
-    private Panel statusCard = null!;
+    private CardPanel statusCard = null!;
     private TableLayoutPanel table = null!;
     private Label projectCaptionLabel = null!, sourceCaptionLabel = null!, destinationCaptionLabel = null!;
-    private Panel optionCard = null!;
+    private CardPanel optionCard = null!;
     private Label optionTitle = null!;
     private Panel action = null!;
+    // 카드끼리 맞닿지 않도록 사이에 끼우는 여백용 스페이서(배경색으로만 채운 빈 패널).
+    private Panel actionOptionGap = null!;
+    private Panel optionStatusGap = null!;
 
     private Label projectValueLabel = null!, sourceValueLabel = null!, destinationValueLabel = null!, statusLabel = null!;
     private RadioButton fullZipRadioButton = null!, selectiveRadioButton = null!;
@@ -31,14 +34,16 @@ partial class BackupControl
         headerPanel = new Panel();
         headerTitleLabel = new Label();
         headerDescriptionLabel = new Label();
-        statusCard = new Panel();
+        statusCard = new CardPanel();
         table = new TableLayoutPanel();
         projectCaptionLabel = new Label();
         sourceCaptionLabel = new Label();
         destinationCaptionLabel = new Label();
-        optionCard = new Panel();
+        optionCard = new CardPanel();
         optionTitle = new Label();
         action = new Panel();
+        actionOptionGap = new Panel();
+        optionStatusGap = new Panel();
         projectValueLabel = new Label();
         sourceValueLabel = new Label();
         destinationValueLabel = new Label();
@@ -71,6 +76,7 @@ partial class BackupControl
         //
         body.Dock = DockStyle.Fill;
         body.AutoScroll = true;
+        body.BackColor = ColorRGB.Background;
         //
         // statusCard (프로젝트/원본 위치/백업 위치 요약)
         //
@@ -163,11 +169,22 @@ partial class BackupControl
         action.Controls.Add(backupButton);
         action.Controls.Add(progressBar);
         //
+        // 카드 사이 여백 스페이서 — 배경색으로 채운 16px 빈 패널이라 카드끼리 맞닿지 않는다.
+        //
+        actionOptionGap.Dock = DockStyle.Top;
+        actionOptionGap.Height = 16;
+        actionOptionGap.BackColor = ColorRGB.Background;
+        optionStatusGap.Dock = DockStyle.Top;
+        optionStatusGap.Height = 16;
+        optionStatusGap.BackColor = ColorRGB.Background;
+        //
         // body에 순서대로 쌓기 (Dock=Top 세 개가 위에서부터 action → optionCard → statusCard 순으로 보이도록
         // 마지막에 추가한 게 제일 위로 온다)
         //
         body.Controls.Add(action);
+        body.Controls.Add(actionOptionGap);
         body.Controls.Add(optionCard);
+        body.Controls.Add(optionStatusGap);
         body.Controls.Add(statusCard);
         //
         // BackupControl

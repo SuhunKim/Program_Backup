@@ -10,6 +10,10 @@ public sealed class LogManager
 {
     private const string LogFolderName = "Logs";
     private const string LogFileName = "pcbackup.log";
+    // 로그 파일이 무한히 커지는 것을 막기 위한 상한 — 이 크기를 넘어서 쓰기 직전이면
+    // 오래된 줄부터 잘라내고 최근 줄만 남긴다(로테이션 파일을 따로 만들지 않는 단순한 방식).
+    private const long MaxLogFileSizeBytes = 5 * 1024 * 1024; // 5MB
+    private const int RetainedLinesAfterTrim = 5000;
     private readonly string m_sLogFilePath;
 
     public LogManager()
@@ -68,6 +72,8 @@ public sealed class LogManager
             if (!string.IsNullOrEmpty(directory))
                 Directory.CreateDirectory(directory);
 
+            TrimIfTooLarge();
+
             var sanitized = message.Replace("\r\n", " ").Replace('\n', ' ').Replace('\t', ' ');
             var line = string.Format("{0:yyyy-MM-dd HH:mm:ss}\t{1}\t{2}{3}", DateTime.Now, level, sanitized, Environment.NewLine);
             File.AppendAllText(m_sLogFilePath, line, Encoding.UTF8);
@@ -76,5 +82,27 @@ public sealed class LogManager
         {
             // 로깅 실패가 앱 동작에 영향을 주면 안 되므로 조용히 무시한다.
         }
+    }
+
+    /// <summary>
+    /// 로그 파일이 상한(<see cref="MaxLogFileSizeBytes"/>)을 넘으면 가장 최근
+    /// <see cref="RetainedLinesAfterTrim"/>줄만 남기고 앞부분을 잘라낸다. 별도 로테이션
+    /// 파일(.1, .2 …)을 만들지 않는 단순한 방식이라, 과거 로그 전체가 필요한 감사 용도에는
+    /// 맞지 않지만 이 도구의 "최근 이력 확인" 용도에는 충분하다.
+    /// </summary>
+    private void TrimIfTooLarge()
+    {
+        if (!File.Exists(m_sLogFilePath))
+            return;
+        if (new FileInfo(m_sLogFilePath).Length <= MaxLogFileSizeBytes)
+            return;
+
+        var recentLines = File.ReadAllLines(m_sLogFilePath, Encoding.UTF8)
+            .TakeLast(RetainedLinesAfterTrim)
+            .ToList();
+
+        var temporaryPath = string.Format("{0}.tmp", m_sLogFilePath);
+        File.WriteAllLines(temporaryPath, recentLines, Encoding.UTF8);
+        File.Move(temporaryPath, m_sLogFilePath, true);
     }
 }

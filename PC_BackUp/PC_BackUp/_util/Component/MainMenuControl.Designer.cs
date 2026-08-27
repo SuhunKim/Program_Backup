@@ -66,7 +66,7 @@ partial class MainMenuControl
         m_menuBackup.Margin = new Padding(3, 3, 3, 12);
         m_menuBackup.Name = "m_menuBackup";
         m_menuBackup.TabIndex = 0;
-        m_menuBackup.Text = "Backup";
+        m_menuBackup.Text = "백업";
         //
         // m_menuRecovery
         //
@@ -74,7 +74,7 @@ partial class MainMenuControl
         m_menuRecovery.Margin = new Padding(3, 3, 3, 12);
         m_menuRecovery.Name = "m_menuRecovery";
         m_menuRecovery.TabIndex = 1;
-        m_menuRecovery.Text = "Recovery";
+        m_menuRecovery.Text = "복원";
         //
         // m_menuHistory
         //
@@ -82,7 +82,7 @@ partial class MainMenuControl
         m_menuHistory.Margin = new Padding(3, 3, 3, 12);
         m_menuHistory.Name = "m_menuHistory";
         m_menuHistory.TabIndex = 2;
-        m_menuHistory.Text = "History";
+        m_menuHistory.Text = "이력 관리";
         //
         // m_menuSettings
         //
@@ -90,7 +90,7 @@ partial class MainMenuControl
         m_menuSettings.Margin = new Padding(3, 3, 3, 12);
         m_menuSettings.Name = "m_menuSettings";
         m_menuSettings.TabIndex = 3;
-        m_menuSettings.Text = "Settings";
+        m_menuSettings.Text = "환경 설정";
         //
         // versionLabel
         //

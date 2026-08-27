@@ -15,7 +15,7 @@ partial class HistoryControl
     private Panel headerPanel = null!;
     private Label headerTitleLabel = null!;
     private Label headerDescriptionLabel = null!;
-    private Panel workspace = null!;
+    private CardPanel workspace = null!;
     private Label calendarTitle = null!;
     private Panel gridHost = null!;
     private Panel selectionBar = null!;
@@ -63,7 +63,7 @@ partial class HistoryControl
         headerPanel = new Panel();
         headerTitleLabel = new Label();
         headerDescriptionLabel = new Label();
-        workspace = new Panel();
+        workspace = new CardPanel();
         _workspaceSplit = new SplitContainer();
         calendarTitle = new Label();
         gridHost = new Panel();
@@ -303,6 +303,7 @@ partial class HistoryControl
         //
         workspace.Dock = DockStyle.Fill;
         workspace.BackColor = ColorRGB.Surface;
+        workspace.Padding = new Padding(1);
         workspace.Controls.Add(_workspaceSplit);
         //
         // bottomBar (전체 선택/취소/설정 적용 버튼 + 진행 바)

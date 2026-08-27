@@ -173,14 +173,57 @@ namespace PC_BackUp
 			RefreshVisualState();
 		}
 
+		protected override void OnResize(EventArgs e)
+		{
+			base.OnResize(e);
+			ApplyRegion();
+		}
+
+		private void ApplyRegion()
+		{
+			// Sidebar 메뉴 버튼은 사이드바 배경과 자연스럽게 이어지도록 각지게 두고,
+			// Primary/Secondary만 라운드 사각형으로 클리핑한다.
+			if (ButtonType == StyledButtonType.Sidebar)
+			{
+				Region?.Dispose();
+				Region = null;
+				return;
+			}
+
+			using var path = ColorRGB.CreateRoundedPath(new Rectangle(0, 0, Width, Height), ColorRGB.ButtonRadius);
+			Region?.Dispose();
+			Region = new Region(path);
+		}
+
 		protected override void OnPaint(PaintEventArgs e)
 		{
 			base.OnPaint(e);
+
+			if (ButtonType == StyledButtonType.Sidebar)
+			{
+				DrawSidebarAccent(e.Graphics);
+				return;
+			}
+
 			if (BorderThickness <= 0 || BorderColor == Color.Transparent)
 				return;
 
-			using var pen = new Pen(BorderColor, BorderThickness) { Alignment = PenAlignment.Inset };
-			e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
+			e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+			var bounds = new Rectangle(0, 0, Width - 1, Height - 1);
+			using var path = ColorRGB.CreateRoundedPath(bounds, ColorRGB.ButtonRadius);
+			using var pen = new Pen(BorderColor, BorderThickness);
+			e.Graphics.DrawPath(pen, path);
+		}
+
+		/// <summary>활성화된 사이드바 메뉴 항목의 왼쪽에 포인트 색 액센트 바를 그린다.</summary>
+		private void DrawSidebarAccent(Graphics g)
+		{
+			if (!IsActive)
+				return;
+
+			const int barWidth = 3;
+			using var brush = new SolidBrush(ColorRGB.Primary);
+			g.FillRectangle(brush, 0, 6, barWidth, Height - 12);
 		}
 
 		protected override bool ProcessDialogKey(Keys keyData)

@@ -23,55 +23,54 @@ public partial class HistoryControl : UserControlBase
         // 부분이라, 디자이너가 그려둔 고정 골격(workspace)에 여기서 덧붙인다.
         workspace.Controls.Add(BuildSummaryRow());
 
-    _calendar.DateSelected += (_, eventArgs) => SelectDate(eventArgs.Start);
-    _grid.DataBindingComplete += (_, _) => _emptyStateLabel.Visible = _grid.Rows.Count == 0;
-    _grid.CellFormatting += (_, e) =>
-    {
-        if (_grid.Columns[e.ColumnIndex].HeaderText == "No.")
-            e.Value = (e.RowIndex + 1).ToString();
-    };
-    _grid.CellPainting += UiPaint_ApplyHeader;
-    _grid.CellMouseClick += UiClick_ApplyHeader;
-    _grid.CellPainting += UiPaint_DiffCell;
-    // "XML 파일" 열이 짧아진 만큼(말줄임 처리) 잘린 전체 경로와, 화면엔 안 보이는 정확한 위치
-    // (XmlDifference.XmlPath)를 툴팁으로 보여준다. "현재"/"백업" 헤더에는 형광펜 강조 색의
-    // 의미를 안내한다(별도 라벨을 추가하지 않고 기존 툴팁 경로를 재사용).
-    _grid.CellToolTipTextNeeded += (_, e) =>
-    {
-        if (e.RowIndex >= 0)
+        _calendar.DateSelected += (_, eventArgs) => SelectDate(eventArgs.Start);
+        _grid.DataBindingComplete += (_, _) => _emptyStateLabel.Visible = _grid.Rows.Count == 0;
+        _grid.CellFormatting += (_, e) =>
         {
-            if (_grid.Columns[e.ColumnIndex].HeaderText != "XML 파일") return;
-            if (_grid.Rows[e.RowIndex].DataBoundItem is XmlDifference item)
-                e.ToolTipText = string.Format("{0}\n{1}", item.RelativeFilePath, item.XmlPath);
-            return;
-        }
-        if (_grid.Columns[e.ColumnIndex] is not DataGridViewTextBoxColumn column) return;
-        if (column.DataPropertyName == nameof(XmlDifference.CurrentValue))
-            e.ToolTipText = "빨강으로 강조된 부분이 백업 값과 다른 부분입니다.";
-        else if (column.DataPropertyName == nameof(XmlDifference.BackupValue))
-            e.ToolTipText = "노랑으로 강조된 부분이 현재 값과 다른 부분입니다.";
-    };
-
-    // "파일/폴더 존재 차이" 목록의 "상태" 열은 XmlDifferenceKind를 그대로 바인딩하면
-    // "ExistsOnlyInCurrent" 같은 영문이 나오니 사람이 읽을 텍스트로 바꿔 준다.
-    _existenceGrid.CellFormatting += (_, e) =>
-    {
-        if (_existenceGrid.Columns[e.ColumnIndex].DataPropertyName != nameof(XmlDifference.Kind))
-            return;
-        e.Value = (XmlDifferenceKind)e.Value! switch
-        {
-            XmlDifferenceKind.ExistsOnlyInCurrent => "현재에만 있음",
-            XmlDifferenceKind.ExistsOnlyInBackup => "백업에만 있음",
-            _ => e.Value
+            if (_grid.Columns[e.ColumnIndex].HeaderText == "No.")
+                e.Value = (e.RowIndex + 1).ToString();
         };
-    };
+        _grid.CellPainting += UiPaint_ApplyHeader;
+        _grid.CellMouseClick += UiClick_ApplyHeader;
+        _grid.CellPainting += UiPaint_DiffCell;
+        // "XML 파일" 열이 짧아진 만큼(말줄임 처리) 잘린 전체 경로와, 화면엔 안 보이는 정확한 위치
+        // (XmlDifference.XmlPath)를 툴팁으로 보여준다. "현재"/"백업" 헤더에는 형광펜 강조 색의
+        // 의미를 안내한다(별도 라벨을 추가하지 않고 기존 툴팁 경로를 재사용).
+        _grid.CellToolTipTextNeeded += (_, e) =>
+        {
+            if (e.RowIndex >= 0)
+            {
+                if (_grid.Columns[e.ColumnIndex].HeaderText != "XML 파일") return;
+                if (_grid.Rows[e.RowIndex].DataBoundItem is XmlDifference item)
+                    e.ToolTipText = string.Format("{0}\n{1}", item.RelativeFilePath, item.XmlPath);
+                return;
+            }
+            if (_grid.Columns[e.ColumnIndex] is not DataGridViewTextBoxColumn column) return;
+            if (column.DataPropertyName == nameof(XmlDifference.CurrentValue))
+                e.ToolTipText = "빨강으로 강조된 부분이 백업 값과 다른 부분입니다.";
+            else if (column.DataPropertyName == nameof(XmlDifference.BackupValue))
+                e.ToolTipText = "노랑으로 강조된 부분이 현재 값과 다른 부분입니다.";
+        };
 
-    _logViewButton.Click += (_, _) => ToggleLogView();
-    _cancelButton.Click += (_, _) => m_oCancellationTokenSource?.Cancel();
+        // "파일/폴더 존재 차이" 목록의 "상태" 열은 XmlDifferenceKind를 그대로 바인딩하면
+        // "ExistsOnlyInCurrent" 같은 영문이 나오니 사람이 읽을 텍스트로 바꿔 준다.
+        _existenceGrid.CellFormatting += (_, e) =>
+        {
+            if (_existenceGrid.Columns[e.ColumnIndex].DataPropertyName != nameof(XmlDifference.Kind))
+                return;
+            e.Value = (XmlDifferenceKind)e.Value! switch
+            {
+                XmlDifferenceKind.ExistsOnlyInCurrent => "현재에만 있음",
+                XmlDifferenceKind.ExistsOnlyInBackup => "백업에만 있음",
+                _ => e.Value
+            };
+        };
 
-  }
+        _logViewButton.Click += (_, _) => ToggleLogView();
+        _cancelButton.Click += (_, _) => m_oCancellationTokenSource?.Cancel();
+    }
 
-	public HistoryControl(
+    public HistoryControl(
         ISettingsService settingsService,
         BackupCatalogService catalogService,
         XmlComparisonService comparisonService,

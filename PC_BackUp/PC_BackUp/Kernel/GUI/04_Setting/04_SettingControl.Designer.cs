@@ -12,7 +12,7 @@ partial class SettingControl
     private Panel headerPanel = null!;
     private Label headerTitleLabel = null!;
     private Label headerDescriptionLabel = null!;
-    private Panel card = null!;
+    private CardPanel card = null!;
     private TableLayoutPanel table = null!;
     private Label projectFieldLabel = null!, executableFieldLabel = null!, backupPathFieldLabel = null!;
     private StyledButton executableBrowseButton = null!;
@@ -22,7 +22,7 @@ partial class SettingControl
     private Panel folderTitleBar = null!;
     private Label folderSectionTitleLabel = null!;
     private StyledButton addFolderButton = null!;
-    private Panel dropZonePanel = null!;
+    private CardPanel dropZonePanel = null!;
     private Label dropZoneLabel = null!;
     private Panel actionPanel = null!;
     private StyledButton saveButton = null!;
@@ -35,7 +35,7 @@ partial class SettingControl
         headerPanel = new Panel();
         headerTitleLabel = new Label();
         headerDescriptionLabel = new Label();
-        card = new Panel();
+        card = new CardPanel();
         table = new TableLayoutPanel();
         projectFieldLabel = new Label();
         executableFieldLabel = new Label();
@@ -47,7 +47,7 @@ partial class SettingControl
         folderTitleBar = new Panel();
         folderSectionTitleLabel = new Label();
         addFolderButton = new StyledButton();
-        dropZonePanel = new Panel();
+        dropZonePanel = new CardPanel();
         dropZoneLabel = new Label();
         actionPanel = new Panel();
         saveButton = new StyledButton();
@@ -75,6 +75,7 @@ partial class SettingControl
         body.Dock = DockStyle.Fill;
         body.AutoScroll = true;
         body.Padding = new Padding(0, 0, 0, 12);
+        body.BackColor = ColorRGB.Background;
         //
         // card
         //

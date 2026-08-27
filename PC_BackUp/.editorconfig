@@ -1,0 +1,16 @@
+# PC_BackUp — 이 저장소의 코딩 규칙은 RULES.md가 최종 근거입니다.
+# 여기서는 그 중 도구가 강제할 수 있는 부분(들여쓰기/공백/줄바꿈)만 설정합니다.
+# 기존에 이미 tab으로 일관되게 작성된 파일(예: 04_SettingControl.cs)은 소급 변경 대상이
+# 아니므로 그대로 두고, 새로 작성/수정하는 코드부터 아래 규칙을 따릅니다.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.cs]
+indent_style = space
+indent_size = 4

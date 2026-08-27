@@ -17,6 +17,7 @@ public partial class SettingControl : UserControlBase
 	private const int RowButtonGap = 6;
 
 	private ISettingsService? m_oSettingsService;
+	private LogManager? m_oLoggingService;
 	private readonly TextBox m_oProjectText = new();
 	private readonly TextBox m_oExecutableText = new();
 	private readonly TextBox m_oBackupPathText = new();
@@ -39,9 +40,10 @@ public partial class SettingControl : UserControlBase
 		dropZoneLabel.DragDrop += DropZone_DragDrop;
 	}
 
-	public SettingControl(ISettingsService settingsService) : this()
+	public SettingControl(ISettingsService settingsService, LogManager loggingService) : this()
 	{
 		m_oSettingsService = settingsService;
+		m_oLoggingService = loggingService;
 	}
 
 	public override void OnMenuSelected() => LoadSettings();
@@ -304,14 +306,16 @@ public partial class SettingControl : UserControlBase
 	private void UiClick_Save(object? sender, EventArgs e)
 	{
 		if (m_oSettingsService is null) return;
+		// 복원 화면에서 선택하는 옵션들은 여기서 보이지 않더라도 저장 시 보존해야 한다.
+		var previousSettings = m_oSettingsService.Load();
 		var settings = new AppSettings
 		{
 			TargetProjectName = m_oProjectText.Text.Trim(),
 			ExecutablePath = m_oExecutableText.Text.Trim(),
 			BackupRootPath = m_oBackupPathText.Text.Trim(),
 			SelectiveFolderNames = m_oFolderRows.Select(row => row.NameText.Text.Trim()).ToList(),
-			// 복원 화면에서 선택하는 안전 백업 기본값은 여기서 보이지 않더라도 저장 시 보존한다.
-			AutoBackupBeforeRestore = m_oSettingsService.Load().AutoBackupBeforeRestore
+			AutoBackupBeforeRestore = previousSettings.AutoBackupBeforeRestore,
+			CompareBeforeRestore = previousSettings.CompareBeforeRestore
 		};
 		var errors = settings.Validate();
 		if (errors.Count > 0)
@@ -326,11 +330,13 @@ public partial class SettingControl : UserControlBase
 			Directory.CreateDirectory(settings.BackupRootPath);
 			m_oSettingsService.Save(settings);
 			m_oStatusLabel.Text = string.Format("저장 완료  ·  {0}", m_oSettingsService.SettingsFilePath);
+			m_oLoggingService?.LogInfo(string.Format("환경 설정 저장: {0}", m_oSettingsService.SettingsFilePath));
 			MessageBox.Show(this, "환경 설정을 저장했습니다.", "저장 완료",
 					MessageBoxButtons.OK, MessageBoxIcon.Information);
 		}
 		catch (Exception exception)
 		{
+			m_oLoggingService?.LogError("환경 설정 저장 중 예외가 발생했습니다.", exception);
 			MessageBox.Show(this, string.Format("설정을 저장하지 못했습니다.\n{0}", exception.Message), "저장 실패",
 					MessageBoxButtons.OK, MessageBoxIcon.Error);
 		}

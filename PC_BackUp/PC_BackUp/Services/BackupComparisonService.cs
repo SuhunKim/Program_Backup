@@ -2,12 +2,17 @@ namespace PC_BackUp.Services;
 
 public sealed class BackupComparisonService
 {
-    public async Task<BackupComparisonResult> CompareAsync(BackupRecord oRecord, AppSettings oSettings, IProgress<int>? oProgress, CancellationToken oCancellationToken)
+    public async Task<BackupComparisonResult> CompareAsync(
+        BackupRecord record,
+        AppSettings settings,
+        IProgress<int>? progress,
+        CancellationToken cancellationToken)
     {
         try
         {
-            var oDifferences = await Task.Run(() => Compare(oRecord, oSettings.GetSourceRoot(), oSettings.BackupRootPath, oProgress, oCancellationToken));
-            return new BackupComparisonResult { Differences = oDifferences };
+            var differences = await Task.Run(() =>
+                Compare(record, settings.GetSourceRoot(), settings.BackupRootPath, progress, cancellationToken));
+            return new BackupComparisonResult { Differences = differences };
         }
         catch (OperationCanceledException)
         {
@@ -15,85 +20,138 @@ public sealed class BackupComparisonService
         }
     }
 
-    private static IReadOnlyList<BackupFileDifference> Compare(BackupRecord oRecord, string sCurrentRoot, string sBackupRootPath, IProgress<int>? oProgress, CancellationToken oCancellationToken)
+    private static IReadOnlyList<BackupFileDifference> Compare(
+        BackupRecord record,
+        string currentRoot,
+        string backupRootPath,
+        IProgress<int>? progress,
+        CancellationToken cancellationToken)
     {
-        var sTemporaryRoot = string.Empty;
+        var temporaryRoot = string.Empty;
         try
         {
-        var oBackupResult = ReadBackupFiles(oRecord, oCancellationToken);
-        sTemporaryRoot = oBackupResult.TemporaryRoot;
-        var oBackupFiles = oBackupResult.Files;
-        var sBackupRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(sBackupRootPath));
-        var oCurrentFiles = Directory.Exists(sCurrentRoot)
-            ? Directory.EnumerateFiles(sCurrentRoot, "*", SearchOption.AllDirectories)
-                .Where(sFile => !Path.GetFullPath(sFile).StartsWith(string.Format("{0}{1}", sBackupRoot, Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
-                .ToDictionary(sFile => Path.GetRelativePath(sCurrentRoot, sFile), StringComparer.OrdinalIgnoreCase)
-            : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var oResults = new List<BackupFileDifference>();
-        var oPaths = oBackupFiles.Keys.Union(oCurrentFiles.Keys, StringComparer.OrdinalIgnoreCase).ToList();
-        for (var iIndex = 0; iIndex < oPaths.Count; iIndex++)
-        {
-            oCancellationToken.ThrowIfCancellationRequested();
-            var sPath = oPaths[iIndex];
-            if (!oBackupFiles.TryGetValue(sPath, out var sBackupPath)) oResults.Add(new BackupFileDifference { RelativePath = sPath, Status = "현재에만 있음" });
-            else if (!oCurrentFiles.TryGetValue(sPath, out var sCurrentPath)) oResults.Add(new BackupFileDifference { RelativePath = sPath, Status = "백업에만 있음" });
-            else if (!FilesEqual(sBackupPath, sCurrentPath, oCancellationToken) &&
-                     !TextFilesEqualIgnoringWhitespace(sBackupPath, sCurrentPath, oCancellationToken))
-                oResults.Add(new BackupFileDifference { RelativePath = sPath, Status = "내용 변경" });
-            oProgress?.Report((iIndex + 1) * 100 / Math.Max(1, oPaths.Count));
-        }
-        return oResults;
+            var backupResult = ReadBackupFiles(record, cancellationToken);
+            temporaryRoot = backupResult.TemporaryRoot;
+            var backupFiles = backupResult.Files;
+            var backupRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(backupRootPath));
+            var currentFiles = Directory.Exists(currentRoot)
+                ? Directory.EnumerateFiles(currentRoot, "*", CurrentRootEnumerationOptions)
+                    .Where(file => !Path.GetFullPath(file).StartsWith(
+                        string.Format("{0}{1}", backupRoot, Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+                    .ToDictionary(file => Path.GetRelativePath(currentRoot, file), StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            var results = new List<BackupFileDifference>();
+            var relativePaths = backupFiles.Keys.Union(currentFiles.Keys, StringComparer.OrdinalIgnoreCase).ToList();
+            for (var index = 0; index < relativePaths.Count; index++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var relativePath = relativePaths[index];
+                if (!backupFiles.TryGetValue(relativePath, out var backupPath))
+                {
+                    results.Add(new BackupFileDifference { RelativePath = relativePath, Status = "현재에만 있음" });
+                }
+                else if (!currentFiles.TryGetValue(relativePath, out var currentPath))
+                {
+                    results.Add(new BackupFileDifference { RelativePath = relativePath, Status = "백업에만 있음" });
+                }
+                else if (!FilesEqual(backupPath, currentPath, cancellationToken) &&
+                         !TextFilesEqualIgnoringWhitespace(backupPath, currentPath, cancellationToken))
+                {
+                    results.Add(new BackupFileDifference { RelativePath = relativePath, Status = "내용 변경" });
+                }
+                progress?.Report((index + 1) * 100 / Math.Max(1, relativePaths.Count));
+            }
+            return results;
         }
         finally
         {
-            if (!string.IsNullOrEmpty(sTemporaryRoot) && Directory.Exists(sTemporaryRoot))
-                try { Directory.Delete(sTemporaryRoot, true); } catch { }
+            if (!string.IsNullOrEmpty(temporaryRoot) && Directory.Exists(temporaryRoot))
+            {
+                try { Directory.Delete(temporaryRoot, true); }
+                catch { /* 임시 폴더 정리 실패는 비교 결과에 영향을 주지 않으므로 무시한다. */ }
+            }
         }
     }
 
-    private static (Dictionary<string, string> Files, string TemporaryRoot) ReadBackupFiles(BackupRecord oRecord, CancellationToken oCancellationToken)
+    // 비교 대상은 지금 실행 중인(=잠금/권한 문제가 일시적으로 있을 수 있는) 소스 트리이므로,
+    // BackupService.EnumerateSourceFiles/XmlComparisonService.ReadCurrentXml과 동일하게
+    // 접근 불가 항목은 건너뛰고 계속 진행한다(중간에 실패시키지 않는다).
+    private static readonly EnumerationOptions CurrentRootEnumerationOptions = new()
     {
-        if (Directory.Exists(oRecord.FullPath))
-            return (Directory.EnumerateFiles(oRecord.FullPath, "*", SearchOption.AllDirectories).ToDictionary(sFile => Path.GetRelativePath(oRecord.FullPath, sFile), StringComparer.OrdinalIgnoreCase), string.Empty);
+        RecurseSubdirectories = true,
+        IgnoreInaccessible = true,
+        AttributesToSkip = FileAttributes.ReparsePoint
+    };
 
-        var sTemporaryRoot = Path.Combine(Path.GetTempPath(), "PC_BackUp", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(sTemporaryRoot);
-        ZipExtraction.SafeExtractToDirectory(oRecord.FullPath, sTemporaryRoot);
-        return (Directory.EnumerateFiles(sTemporaryRoot, "*", SearchOption.AllDirectories).ToDictionary(sFile => Path.GetRelativePath(sTemporaryRoot, sFile), StringComparer.OrdinalIgnoreCase), sTemporaryRoot);
+    private static (Dictionary<string, string> Files, string TemporaryRoot) ReadBackupFiles(
+        BackupRecord record, CancellationToken cancellationToken)
+    {
+        if (Directory.Exists(record.FullPath))
+        {
+            var files = Directory.EnumerateFiles(record.FullPath, "*", SearchOption.AllDirectories)
+                .ToDictionary(file => Path.GetRelativePath(record.FullPath, file), StringComparer.OrdinalIgnoreCase);
+            return (files, string.Empty);
+        }
+
+        var temporaryRoot = Path.Combine(Path.GetTempPath(), "PC_BackUp", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temporaryRoot);
+        ZipExtraction.SafeExtractToDirectory(record.FullPath, temporaryRoot);
+        var extractedFiles = Directory.EnumerateFiles(temporaryRoot, "*", SearchOption.AllDirectories)
+            .ToDictionary(file => Path.GetRelativePath(temporaryRoot, file), StringComparer.OrdinalIgnoreCase);
+        return (extractedFiles, temporaryRoot);
     }
 
-    private static bool FilesEqual(string sLeft, string sRight, CancellationToken oCancellationToken)
+    private static bool FilesEqual(string leftPath, string rightPath, CancellationToken cancellationToken)
     {
-        var oLeft = new FileInfo(sLeft); var oRight = new FileInfo(sRight); if (oLeft.Length != oRight.Length) return false;
-        using var oLeftStream = File.OpenRead(sLeft); using var oRightStream = File.OpenRead(sRight); var baryLeft = new byte[81920]; var baryRight = new byte[81920];
-        while (true) { oCancellationToken.ThrowIfCancellationRequested(); var iLeft = oLeftStream.Read(baryLeft); var iRight = oRightStream.Read(baryRight); if (iLeft != iRight) return false; if (iLeft == 0) return true; if (!baryLeft.AsSpan(0, iLeft).SequenceEqual(baryRight.AsSpan(0, iRight))) return false; }
-    }
-
-    private static bool TextFilesEqualIgnoringWhitespace(string sLeft, string sRight, CancellationToken oCancellationToken)
-    {
-        var sExtension = Path.GetExtension(sLeft);
-        if (sExtension is not ".txt" and not ".xml" and not ".json" and not ".config" and not ".ini" and not ".cs" and not ".csproj")
+        var leftInfo = new FileInfo(leftPath);
+        var rightInfo = new FileInfo(rightPath);
+        if (leftInfo.Length != rightInfo.Length)
             return false;
 
-        using var oLeftReader = new StreamReader(sLeft, detectEncodingFromByteOrderMarks: true);
-        using var oRightReader = new StreamReader(sRight, detectEncodingFromByteOrderMarks: true);
+        using var leftStream = File.OpenRead(leftPath);
+        using var rightStream = File.OpenRead(rightPath);
+        var leftBuffer = new byte[81920];
+        var rightBuffer = new byte[81920];
         while (true)
         {
-            oCancellationToken.ThrowIfCancellationRequested();
-            var iLeft = ReadNextNonWhitespace(oLeftReader);
-            var iRight = ReadNextNonWhitespace(oRightReader);
-            if (iLeft != iRight)
+            cancellationToken.ThrowIfCancellationRequested();
+            var leftRead = leftStream.Read(leftBuffer);
+            var rightRead = rightStream.Read(rightBuffer);
+            if (leftRead != rightRead)
                 return false;
-            if (iLeft < 0)
+            if (leftRead == 0)
+                return true;
+            if (!leftBuffer.AsSpan(0, leftRead).SequenceEqual(rightBuffer.AsSpan(0, rightRead)))
+                return false;
+        }
+    }
+
+    private static bool TextFilesEqualIgnoringWhitespace(string leftPath, string rightPath, CancellationToken cancellationToken)
+    {
+        var extension = Path.GetExtension(leftPath);
+        if (extension is not ".txt" and not ".xml" and not ".json" and not ".config" and not ".ini" and not ".cs" and not ".csproj")
+            return false;
+
+        using var leftReader = new StreamReader(leftPath, detectEncodingFromByteOrderMarks: true);
+        using var rightReader = new StreamReader(rightPath, detectEncodingFromByteOrderMarks: true);
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var leftChar = ReadNextNonWhitespace(leftReader);
+            var rightChar = ReadNextNonWhitespace(rightReader);
+            if (leftChar != rightChar)
+                return false;
+            if (leftChar < 0)
                 return true;
         }
     }
 
-    private static int ReadNextNonWhitespace(TextReader oReader)
+    private static int ReadNextNonWhitespace(TextReader reader)
     {
-        int iCharacter;
-        do { iCharacter = oReader.Read(); }
-        while (iCharacter >= 0 && char.IsWhiteSpace((char)iCharacter));
-        return iCharacter;
+        int character;
+        do { character = reader.Read(); }
+        while (character >= 0 && char.IsWhiteSpace((char)character));
+        return character;
     }
 }

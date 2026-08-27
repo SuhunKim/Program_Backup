@@ -33,7 +33,7 @@ public partial class MainForm : Form
             new RecoveryControl(settingsService, catalogService, recoveryService, backupService, backupComparisonService, loggingService));
         m_oMenuManager.Register(MainMenuId.History,
             new HistoryControl(settingsService, catalogService, xmlComparisonService, loggingService));
-        m_oMenuManager.Register(MainMenuId.Settings, new SettingControl(settingsService));
+        m_oMenuManager.Register(MainMenuId.Settings, new SettingControl(settingsService, loggingService));
 
         m_oMenuManager.Select(MainMenuId.Backup);
     }
