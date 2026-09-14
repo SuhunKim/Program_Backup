@@ -97,14 +97,14 @@ public partial class HistoryControl : UserControlBase
         dateIcon.BackColor = ColorRGB.Surface;
         var dateCard = ColorRGB.CreateStatCard(dateIcon, _summaryDateCaption, _summaryDateValue);
         dateCard.Dock = DockStyle.Fill;
-        dateCard.Margin = new Padding(0, 0, 8, 0);
+        //dateCard.Margin = new Padding(3); //Padding(0, 0, 8, 0);
 
         _summaryCountCaption.Text = "이력 요약";
         var countIcon = IconGlyphs.CreateBadge(36, ColorRGB.SidebarActive, ColorRGB.Primary, IconGlyphs.Archive);
         countIcon.BackColor = ColorRGB.Surface;
         var countCard = ColorRGB.CreateStatCard(countIcon, _summaryCountCaption, _summaryCountValue);
         countCard.Dock = DockStyle.Fill;
-        countCard.Margin = new Padding(8, 0, 0, 0);
+        //countCard.Margin = new Padding(8, 0, 0, 0);
 
         layout.Controls.Add(dateCard, 0, 0);
         layout.Controls.Add(countCard, 1, 0);

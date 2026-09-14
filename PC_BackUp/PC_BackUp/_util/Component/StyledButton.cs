@@ -211,7 +211,9 @@ namespace PC_BackUp
 			e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 			var bounds = new Rectangle(0, 0, Width - 1, Height - 1);
 			using var path = ColorRGB.CreateRoundedPath(bounds, ColorRGB.ButtonRadius);
-			using var pen = new Pen(BorderColor, BorderThickness);
+			// Alignment를 Inset으로 두지 않으면 기본값(Center)이라 선의 절반이 경로 바깥쪽으로
+			// 그려지는데, Region이 그 바깥쪽을 클리핑해버려서 테두리가 얇게 잘려 보인다.
+			using var pen = new Pen(BorderColor, BorderThickness) { Alignment = PenAlignment.Inset };
 			e.Graphics.DrawPath(pen, path);
 		}
 

@@ -19,10 +19,12 @@ public class CardPanel : Panel
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
                  ControlStyles.ResizeRedraw | ControlStyles.UserPaint, true);
         BackColor = ColorRGB.Surface;
+        Padding = new Padding(3);
     }
 
     /// <summary>카드 테두리 색. 배경과 구분이 필요 없는 곳(예: 요약 카드)에서는 Transparent로 끌 수 있다.</summary>
     [Category("Card Panel")]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Color BorderColor { get; set; } = ColorRGB.Border;
 
     [Category("Card Panel")]
@@ -53,7 +55,9 @@ public class CardPanel : Panel
 
         if (BorderColor != Color.Transparent)
         {
-            using var pen = new Pen(BorderColor, 1);
+            // Alignment를 Inset으로 두지 않으면 기본값(Center)이라 선의 절반이 경로 바깥쪽으로
+            // 그려지는데, Region이 그 바깥쪽을 클리핑해버려서 테두리가 얇게 잘려 보인다.
+            using var pen = new Pen(BorderColor, 1) { Alignment = PenAlignment.Inset };
             e.Graphics.DrawPath(pen, path);
         }
 
