@@ -46,6 +46,36 @@
 오래된 문서의 "미구현" 같은 서술은 작성 시점의 스냅샷일 뿐입니다.
 그것을 근거로 판단하기 전에 실제 코드를 확인하세요.
 
+## 브랜치 및 워크트리 작업
+
+새 이슈는 기존 작업 폴더에서 브랜치를 전환하지 말고, **이슈별 새 브랜치와 새 워크트리**에서
+작업합니다. 이렇게 하면 여러 이슈의 빌드·실행 산출물과 작업 변경사항이 서로 섞이지 않습니다.
+
+- 저장소 루트는 항상 `git rev-parse --show-toplevel`으로 확인합니다.
+- 워크트리는 저장소 루트와 같은 부모 폴더 아래에 만듭니다.
+- 폴더명은 `<저장소폴더명>-issue<번호>`를 사용합니다. 예: `PC_Backup-issue5`
+- 버그 수정 브랜치는 `fix/issue-<번호>`, 신규 기능 브랜치는 `feature/issue-<번호>`를 사용합니다.
+
+새 브랜치로 시작할 때는 저장소 루트에서 다음처럼 실행합니다.
+
+```powershell
+git worktree add ..\PC_Backup-issue<번호> -b fix/issue-<번호>
+```
+
+대상 브랜치가 이미 로컬 또는 원격에 있으면 `-b` 없이 기존 브랜치를 지정합니다.
+
+```powershell
+git worktree add ..\PC_Backup-issue<번호> fix/issue-<번호>
+```
+
+작업 중에는 `git worktree list`로 워크트리와 브랜치 연결 상태를 확인합니다. 머지 후 더 이상
+필요 없는 워크트리는 커밋되지 않은 변경사항이 없는지 먼저 확인한 뒤 제거합니다.
+
+```powershell
+git worktree remove ..\PC_Backup-issue<번호>
+git branch -d fix/issue-<번호>
+```
+
 ## 빌드  <!-- [필수] -->
 
 << 실제로 동작을 확인한 명령만 적으세요.
@@ -114,4 +144,3 @@
   저작권 안내: © AP Systems — Smart Engineering PC Control Team. All rights reserved.
   이 템플릿은 사내 업무용으로 작성되었습니다. 사전 승인 없이 사외로 배포·전달·게시하지 마세요.
 -->
-
