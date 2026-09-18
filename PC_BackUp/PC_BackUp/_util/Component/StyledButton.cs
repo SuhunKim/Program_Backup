@@ -253,7 +253,8 @@ namespace PC_BackUp
 					BorderThickness = 0;
 					Padding = new Padding(16, 0, 0, 0);
 					TextAlign = ContentAlignment.MiddleLeft;
-					Size = new Size(190, 50);
+                    // [Codex - 2026.09.18] 사이드바 내부 폭(192px)과 기본 좌우 Margin(3px)에 맞춘다.
+                    Size = new Size(186, 50);
 					break;
 
 				case StyledButtonType.Secondary:

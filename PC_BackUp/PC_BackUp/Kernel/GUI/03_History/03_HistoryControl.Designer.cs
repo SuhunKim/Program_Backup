@@ -145,10 +145,28 @@ partial class HistoryControl
         m_oSummaryDateCard.SuspendLayout();
         bottomBar.SuspendLayout();
         SuspendLayout();
+<<<<<<< Updated upstream
         // 
         // headerPanel
         // 
         headerPanel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+=======
+        headerPanel.Dock = DockStyle.Top;
+        headerPanel.Height = PageLayoutMetrics.HeaderHeight;
+        headerPanel.Padding = new Padding(8, 2, 0, 0);
+        headerTitleLabel.Text = "이력 관리";
+        headerTitleLabel.Dock = DockStyle.Top;
+        headerTitleLabel.Height = 31;
+        headerTitleLabel.Font = new Font("맑은 고딕", 20F, FontStyle.Bold);
+        headerTitleLabel.ForeColor = ColorRGB.Text;
+        headerTitleLabel.TextAlign = ContentAlignment.MiddleLeft;
+        headerDescriptionLabel.Text = "날짜를 선택해 그날의 백업과 작업 로그를 확인하고, 필요한 항목만 비교/적용합니다.";
+        headerDescriptionLabel.Dock = DockStyle.Top;
+        headerDescriptionLabel.Height = 24;
+        headerDescriptionLabel.Font = new Font("맑은 고딕", 10F);
+        headerDescriptionLabel.ForeColor = ColorRGB.MutedText;
+        headerDescriptionLabel.TextAlign = ContentAlignment.MiddleLeft;
+>>>>>>> Stashed changes
         headerPanel.Controls.Add(headerDescriptionLabel);
         headerPanel.Controls.Add(headerTitleLabel);
         headerPanel.Location = new Point(0, 0);
@@ -482,6 +500,7 @@ partial class HistoryControl
         selectionBar.Controls.Add(_logViewButton);
         selectionBar.Controls.Add(selectionBarActionSpacer);
         selectionBar.Controls.Add(_compareButton);
+<<<<<<< Updated upstream
         selectionBar.Location = new Point(0, 0);
         selectionBar.Name = "selectionBar";
         selectionBar.Padding = new Padding(18, 8, 18, 8);
@@ -711,6 +730,62 @@ partial class HistoryControl
         // bottomBar
         // 
         bottomBar.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+=======
+        //
+        // _workspaceSplit (왼쪽: 달력, 오른쪽: 비교 대상 선택 + 목록)
+        //
+        _workspaceSplit.Dock = DockStyle.Fill;
+        _workspaceSplit.SplitterDistance = 280;
+        _workspaceSplit.IsSplitterFixed = true;
+        _workspaceSplit.FixedPanel = FixedPanel.Panel1;
+        _workspaceSplit.BackColor = ColorRGB.Border;
+        calendarTitle.Text = "이력 날짜";
+        calendarTitle.Dock = DockStyle.Top;
+        calendarTitle.Height = CalendarTitleHeight;
+        calendarTitle.Font = new Font("맑은 고딕", 11F, FontStyle.Bold);
+        calendarTitle.ForeColor = ColorRGB.Text;
+        _workspaceSplit.Panel1.BackColor = ColorRGB.Surface;
+        _workspaceSplit.Panel1.Padding = new Padding(CalendarLeftMargin, 0, 10, 0);
+        _workspaceSplit.Panel1.Controls.Add(_calendar);
+        _workspaceSplit.Panel1.Controls.Add(_calendarStatsLabel);
+        _workspaceSplit.Panel1.Controls.Add(_calendarRecentTitle);
+        _workspaceSplit.Panel1.Controls.Add(_calendarRecentPanel);
+        _workspaceSplit.Panel1.Controls.Add(calendarTitle);
+        _workspaceSplit.Panel2.BackColor = ColorRGB.Surface;
+        _workspaceSplit.Panel2.Controls.Add(gridHost);
+        _workspaceSplit.Panel2.Controls.Add(selectionBar);
+        //
+        // workspace (요약 카드 행은 HistoryControl() 생성자에서 마지막에 얹는다)
+        //
+        workspace.Dock = DockStyle.Fill;
+        workspace.BackColor = ColorRGB.Surface;
+        workspace.Padding = new Padding(1);
+        workspace.Controls.Add(_workspaceSplit);
+        //
+        // bottomBar (전체 선택/취소/설정 적용 버튼 + 진행 바)
+        //
+        bottomBar.Dock = DockStyle.Bottom;
+        bottomBar.Height = PageLayoutMetrics.ActionBarHeight;
+        bottomBar.Padding = new Padding(0, 12, 0, 10);
+        _cancelButton.ButtonType = StyledButtonType.Secondary;
+        _cancelButton.Text = "취소";
+        _cancelButton.Dock = DockStyle.Right;
+        _cancelButton.Width = PageLayoutMetrics.SecondaryButtonWidth;
+        _cancelButton.Margin = new Padding(0, 0, 10, 0);
+        _cancelButton.Visible = false;
+        _summaryLabel.Dock = DockStyle.Fill;
+        _summaryLabel.Padding = new Padding(18, 0, 0, 0);
+        _summaryLabel.TextAlign = ContentAlignment.MiddleLeft;
+        _summaryLabel.ForeColor = ColorRGB.MutedText;
+        _summaryLabel.Text = "백업을 선택하고 XML 비교를 실행하세요.";
+        _applyButton.Text = "선택 설정 적용";
+        _applyButton.Size = new Size(PageLayoutMetrics.PrimaryButtonWidth, 42);
+        _applyButton.Dock = DockStyle.Right;
+        _applyButton.Enabled = false;
+        _applyButton.Click += UiClick_Apply;
+        _progress.Dock = DockStyle.Top;
+        _progress.Height = 6;
+>>>>>>> Stashed changes
         bottomBar.Controls.Add(_summaryLabel);
         bottomBar.Controls.Add(_cancelButton);
         bottomBar.Controls.Add(_applyButton);

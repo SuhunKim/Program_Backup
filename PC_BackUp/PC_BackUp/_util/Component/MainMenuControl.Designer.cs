@@ -7,7 +7,11 @@ partial class MainMenuControl
     private Label logoLabel = null!;
     private Label versionLabel = null!;
     private FlowLayoutPanel menuPanel = null!;
+<<<<<<< Updated upstream
     private StyledButton m_menuDashboard = null!;
+=======
+    private Panel extensionMenuPanel = null!;
+>>>>>>> Stashed changes
     private StyledButton m_menuBackup = null!;
     private StyledButton m_menuRecovery = null!;
     private StyledButton m_menuHistory = null!;
@@ -23,8 +27,12 @@ partial class MainMenuControl
     {
         sidebarPanel = new Panel();
         menuPanel = new FlowLayoutPanel();
+<<<<<<< Updated upstream
         m_menuDashboard = new StyledButton();
         splitter1 = new Splitter();
+=======
+        extensionMenuPanel = new Panel();
+>>>>>>> Stashed changes
         m_menuBackup = new StyledButton();
         splitter2 = new Splitter();
         m_menuRecovery = new StyledButton();
@@ -39,8 +47,14 @@ partial class MainMenuControl
         SuspendLayout();
         // 
         // sidebarPanel
+<<<<<<< Updated upstream
         // 
         sidebarPanel.BackColor = Color.FromArgb(240, 241, 244);
+=======
+        //
+        sidebarPanel.BackColor = ColorRGB.Sidebar;
+        sidebarPanel.Controls.Add(extensionMenuPanel);
+>>>>>>> Stashed changes
         sidebarPanel.Controls.Add(menuPanel);
         sidebarPanel.Controls.Add(versionLabel);
         sidebarPanel.Controls.Add(logoLabel);
@@ -62,11 +76,13 @@ partial class MainMenuControl
         menuPanel.Controls.Add(m_menuHistory);
         menuPanel.Controls.Add(splitter4);
         menuPanel.Controls.Add(m_menuSettings);
-        menuPanel.Dock = DockStyle.Fill;
+        menuPanel.Dock = DockStyle.Top;
         menuPanel.FlowDirection = FlowDirection.TopDown;
+        menuPanel.AutoScroll = true;
         menuPanel.Location = new Point(14, 108);
         menuPanel.Name = "menuPanel";
         menuPanel.Padding = new Padding(0, 14, 0, 0);
+<<<<<<< Updated upstream
         menuPanel.Size = new Size(192, 523);
         menuPanel.TabIndex = 0;
         menuPanel.WrapContents = false;
@@ -97,6 +113,21 @@ partial class MainMenuControl
         splitter1.TabIndex = 5;
         splitter1.TabStop = false;
         // 
+=======
+        menuPanel.Size = new Size(192, 242);
+        menuPanel.TabIndex = 0;
+        menuPanel.WrapContents = false;
+        //
+        // extensionMenuPanel
+        //
+        extensionMenuPanel.AccessibleName = "향후 메뉴 확장 영역";
+        extensionMenuPanel.AutoScroll = true;
+        extensionMenuPanel.Dock = DockStyle.Fill;
+        extensionMenuPanel.Name = "extensionMenuPanel";
+        extensionMenuPanel.Padding = new Padding(0, 16, 0, 0);
+        extensionMenuPanel.TabIndex = 4;
+        //
+>>>>>>> Stashed changes
         // m_menuBackup
         // 
         m_menuBackup.BackColor = Color.FromArgb(240, 241, 244);

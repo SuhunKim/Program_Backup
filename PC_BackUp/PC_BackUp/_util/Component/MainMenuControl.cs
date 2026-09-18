@@ -12,6 +12,11 @@ public partial class MainMenuControl : UserControl
 {
     public event EventHandler<MainMenuId>? MenuItemClicked;
 
+    /// <summary>
+    /// 향후 메뉴 그룹이나 보조 메뉴를 배치할 수 있는 사이드바 확장 영역이다.
+    /// </summary>
+    internal Panel ExtensionMenuPanel => extensionMenuPanel;
+
     private readonly Dictionary<MainMenuId, StyledButton> m_oButtons = new();
     private StyledButton? m_oActiveButton;
 

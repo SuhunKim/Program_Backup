@@ -122,9 +122,27 @@ partial class RecoveryControl
         m_oSummaryDateCard.SuspendLayout();
         actionPanel.SuspendLayout();
         SuspendLayout();
+<<<<<<< Updated upstream
         //
         // headerPanel
         //
+=======
+        headerPanel.Dock = DockStyle.Top;
+        headerPanel.Height = PageLayoutMetrics.HeaderHeight;
+        headerPanel.Padding = new Padding(8, 2, 0, 0);
+        headerTitleLabel.Text = "복원";
+        headerTitleLabel.Dock = DockStyle.Top;
+        headerTitleLabel.Height = 31;
+        headerTitleLabel.Font = new Font("맑은 고딕", 20F, FontStyle.Bold);
+        headerTitleLabel.ForeColor = ColorRGB.Text;
+        headerTitleLabel.TextAlign = ContentAlignment.MiddleLeft;
+        headerDescriptionLabel.Text = "백업 시점을 선택하고 안전하게 복원하세요.";
+        headerDescriptionLabel.Dock = DockStyle.Top;
+        headerDescriptionLabel.Height = 24;
+        headerDescriptionLabel.Font = new Font("맑은 고딕", 10F);
+        headerDescriptionLabel.ForeColor = ColorRGB.MutedText;
+        headerDescriptionLabel.TextAlign = ContentAlignment.MiddleLeft;
+>>>>>>> Stashed changes
         headerPanel.Controls.Add(headerDescriptionLabel);
         headerPanel.Controls.Add(headerTitleLabel);
         headerPanel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
@@ -247,10 +265,16 @@ partial class RecoveryControl
         //
         // m_oTimeColumn
         //
+<<<<<<< Updated upstream
         m_oTimeColumn.DataPropertyName = "TimeText";
         m_oTimeColumn.HeaderText = "시간";
         m_oTimeColumn.Name = "m_oTimeColumn";
         m_oTimeColumn.ReadOnly = true;
+=======
+        workspace.Dock = DockStyle.Fill;
+        workspace.BackColor = ColorRGB.Surface;
+        workspace.Padding = new Padding(PageLayoutMetrics.CardPadding);
+>>>>>>> Stashed changes
         //
         // m_oKindColumn
         //
@@ -319,12 +343,20 @@ partial class RecoveryControl
         selectedBackupCardPanel.Controls.Add(_restoreTargetLabel);
         selectedBackupCardPanel.Controls.Add(_selectedBackupMetaLabel);
         selectedBackupCardPanel.Controls.Add(_selectedBackupLabel);
+<<<<<<< Updated upstream
         selectedBackupCardPanel.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         selectedBackupCardPanel.Location = new Point(0, 0);
         selectedBackupCardPanel.Name = "selectedBackupCardPanel";
         selectedBackupCardPanel.Padding = new Padding(16, 10, 16, 10);
         selectedBackupCardPanel.Size = new Size(652, 220);
         selectedBackupCardPanel.TabIndex = 0;
+=======
+        detailsGap.Dock = DockStyle.Right;
+        detailsGap.Width = PageLayoutMetrics.CardGap;
+        detailsPanel.Controls.Add(selectedBackupCardPanel);
+        detailsPanel.Controls.Add(detailsGap);
+        // (안전 안내 카드는 RecoveryControl() 생성자에서 detailsPanel.Controls에 마지막으로 추가된다)
+>>>>>>> Stashed changes
         //
         // _autoSafetyBackupCheckBox
         //
@@ -565,6 +597,25 @@ partial class RecoveryControl
         //
         // actionPanel
         //
+<<<<<<< Updated upstream
+=======
+        actionPanel.Dock = DockStyle.Bottom;
+        actionPanel.Height = PageLayoutMetrics.ActionBarHeight;
+        actionPanel.Padding = new Padding(0, 12, 0, 10);
+        _progress.Dock = DockStyle.Top;
+        _progress.Height = 6;
+        _cancelButton.ButtonType = StyledButtonType.Secondary;
+        _cancelButton.Text = "취소";
+        _cancelButton.Dock = DockStyle.Right;
+        _cancelButton.Width = PageLayoutMetrics.SecondaryButtonWidth;
+        _cancelButton.Margin = new Padding(0, 0, 10, 0);
+        _cancelButton.Visible = false;
+        _restoreButton.Text = "선택 백업 복원";
+        _restoreButton.Width = PageLayoutMetrics.PrimaryButtonWidth;
+        _restoreButton.Height = 42;
+        _restoreButton.Dock = DockStyle.Right;
+        _restoreButton.Click += UiClick_Restore;
+>>>>>>> Stashed changes
         actionPanel.Controls.Add(_cancelButton);
         actionPanel.Controls.Add(_restoreButton);
         actionPanel.Controls.Add(_progress);
