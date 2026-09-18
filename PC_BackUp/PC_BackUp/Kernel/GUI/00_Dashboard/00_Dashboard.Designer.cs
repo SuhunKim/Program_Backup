@@ -110,13 +110,15 @@ namespace PC_BackUp.Kernel.GUI._00_Dashboard
             // 
             // m_oHeaderTitleLabel
             // 
-            m_oHeaderTitleLabel.Font = new Font("맑은 고딕", 20F, FontStyle.Bold);
+            m_oHeaderTitleLabel.Dock = DockStyle.Top;
+            m_oHeaderTitleLabel.Font = new Font("맑은 고딕", 18F, FontStyle.Bold);
             m_oHeaderTitleLabel.ForeColor = Color.FromArgb(28, 32, 41);
             m_oHeaderTitleLabel.Location = new Point(0, 0);
             m_oHeaderTitleLabel.Name = "m_oHeaderTitleLabel";
-            m_oHeaderTitleLabel.Size = new Size(500, 32);
+            m_oHeaderTitleLabel.Size = new Size(960, 32);
             m_oHeaderTitleLabel.TabIndex = 0;
             m_oHeaderTitleLabel.Text = "대시보드";
+            m_oHeaderTitleLabel.TextAlign = ContentAlignment.MiddleLeft;
             // 
             // m_oLastBackupCard
             // 
