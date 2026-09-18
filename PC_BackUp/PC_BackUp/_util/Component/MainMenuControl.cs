@@ -19,6 +19,7 @@ public partial class MainMenuControl : UserControl
     {
         InitializeComponent();
 
+        Register(MainMenuId.Dashboard, m_menuDashboard);
         Register(MainMenuId.Backup, m_menuBackup);
         Register(MainMenuId.Recovery, m_menuRecovery);
         Register(MainMenuId.History, m_menuHistory);

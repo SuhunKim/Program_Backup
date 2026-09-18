@@ -12,15 +12,13 @@ public partial class RecoveryControl : UserControlBase
 	private LogManager? m_oLoggingService;
 	private bool m_bIsBusy;
 	private CancellationTokenSource? m_oCancellationTokenSource;
+	private BackupRecord? m_oPendingSelectedRecord;
 	private readonly System.Windows.Forms.Timer m_oRefreshDebounceTimer = new() { Interval = 500 };
 	private FileSystemWatcher? m_oBackupFolderWatcher;
 
 	public RecoveryControl()
 	{
 		InitializeComponent();
-
-		// 아이콘 배지(IconGlyphs)는 GDI+ Paint 이벤트로 그려서 디자이너가 표현할 수 없는
-		// 부분이라, 디자이너가 그려둔 고정 골격(workspace/detailsPanel)에 여기서 덧붙인다.
 
 		_grid.DataBindingComplete += (_, _) =>
 		{
@@ -32,12 +30,6 @@ public partial class RecoveryControl : UserControlBase
 
 		_cancelButton.Click += (_, _) => m_oCancellationTokenSource?.Cancel();
 		_calendar.DateSelected += (_, eventArgs) => LoadDate(eventArgs.Start);
-
-		workspace.Controls.Add(BuildSummaryRow());
-		var safetyInfoCard = BuildSafetyInfoCard();
-		safetyInfoCard.Dock = DockStyle.Right;
-		safetyInfoCard.Width = 300;
-		detailsPanel.Controls.Add(safetyInfoCard);
 
 		m_oRefreshDebounceTimer.Tick += (_, _) =>
 		{
@@ -60,97 +52,35 @@ public partial class RecoveryControl : UserControlBase
 		m_oBackupService = backupService;
 		m_oBackupComparisonService = backupComparisonService;
 		m_oLoggingService = loggingService;
+		// [Codex - 2026.09.14] 디자이너에는 표시하고 실제 서비스 화면이 생성될 때만 숨긴다.
+		_cancelButton.Visible = false;
 	}
 
 	public override void OnMenuSelected() => RefreshCatalog();
 
-	/// <summary>상단 "선택된 백업 날짜 / 백업 요약" 카드 두 개 — 원형 아이콘을 코드로 그려야 해서 디자이너로 옮기지 못했다.</summary>
-	private Control BuildSummaryRow()
-	{
-		var row = new Panel { Dock = DockStyle.Top, Height = 92, Padding = new Padding(0, 0, 0, 16) };
-		var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
-		layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-		layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-
-		_summaryDateCaption.Text = "선택된 백업 날짜";
-		var dateIcon = IconGlyphs.CreateBadge(36, ColorRGB.SidebarActive, ColorRGB.Primary, IconGlyphs.Calendar);
-		dateIcon.BackColor = ColorRGB.Surface; // 카드(흰 배경) 모서리와 원 바깥쪽이 자연스럽게 이어지도록
-		var dateCard = ColorRGB.CreateStatCard(dateIcon, _summaryDateCaption, _summaryDateValue);
-		dateCard.Dock = DockStyle.Fill;
-		dateCard.Margin = new Padding(0, 0, 8, 0);
-
-		_summaryCountCaption.Text = "백업 요약";
-		var countIcon = IconGlyphs.CreateBadge(36, ColorRGB.SidebarActive, ColorRGB.Primary, IconGlyphs.Archive);
-		countIcon.BackColor = ColorRGB.Surface;
-		var countCard = ColorRGB.CreateStatCard(countIcon, _summaryCountCaption, _summaryCountValue);
-		countCard.Dock = DockStyle.Fill;
-		countCard.Margin = new Padding(8, 0, 0, 0);
-
-		layout.Controls.Add(dateCard, 0, 0);
-		layout.Controls.Add(countCard, 1, 0);
-		row.Controls.Add(layout);
-		return row;
-	}
-
-	/// <summary>안전한 복원을 위한 안내 — 체크 아이콘을 코드로 그려야 해서 디자이너로 옮기지 못했다.</summary>
-	private static Control BuildSafetyInfoCard()
-	{
-		var card = new CardPanel { BackColor = ColorRGB.SafetyBackground, BorderColor = ColorRGB.SafetyBorder, Padding = new Padding(14, 10, 14, 10) };
-
-		var titleRow = new Panel { Dock = DockStyle.Top, Height = 24 };
-		var titleIcon = IconGlyphs.CreateBadge(20, ColorRGB.SafetyIcon, Color.White, IconGlyphs.Check);
-		titleIcon.BackColor = ColorRGB.SafetyBackground; // 안내 박스 배경과 아이콘 사각 모서리를 맞춘다
-		titleIcon.Location = new Point(0, 2);
-		var titleLabel = new Label
-		{
-			Text = "안전한 복원을 위한 안내",
-			Location = new Point(titleIcon.Right + 6, 2),
-			AutoSize = true,
-			Font = new Font("맑은 고딕", 9F, FontStyle.Bold),
-			ForeColor = ColorRGB.SafetyText
-		};
-		titleRow.Controls.Add(titleLabel);
-		titleRow.Controls.Add(titleIcon);
-
-		var bodyLabel = new Label
-		{
-			Dock = DockStyle.Fill,
-			Text = "•  복원을 시작하면 선택한 백업으로 현재 데이터를 덮어씁니다.\r\n" +
-							 "•  복원 중에는 다른 프로그램을 종료해 주세요.\r\n" +
-							 "•  복원 완료 후 프로그램을 재시작해야 할 수 있습니다.",
-			Font = new Font("맑은 고딕", 8.5F),
-			ForeColor = ColorRGB.SafetyText
-		};
-
-		card.Controls.Add(bodyLabel);
-		card.Controls.Add(titleRow);
-		return card;
-	}
-
 	/// <summary>
-	/// MonthCalendar가 실제 화면에 붙어 핸들이 만들어진 뒤에야 PreferredSize가 정확해지므로,
-	/// 화면이 표시될 때마다(= 이 화면으로 올 때마다) 실제 크기를 다시 재서 패널 폭에 반영한다.
-	/// 생성 시점에 미리 계산해 두면(=핸들이 없을 때) 한 달 격자가 깨져서 요일/날짜 줄이 겹쳐 보인다.
+	/// 대시보드 등 다른 화면에서 선택한 백업을 다음 메뉴 진입 시 복원 목록에 다시 선택한다.
+	/// 카탈로그를 새로 읽은 뒤 같은 전체 경로의 새 <see cref="BackupRecord"/>를 찾아 선택하므로,
+	/// 화면 간에 오래된 레코드 객체를 공유하지 않는다.
 	/// </summary>
-	private void ApplyCalendarSizing()
+	public void SelectBackupOnNextDisplay(BackupRecord record)
 	{
-		_calendar.Size = _calendar.PreferredSize;
-		var panel1Width = _calendar.Width + CalendarLeftMargin + 20;
-		if (_workspaceSplit.SplitterDistance != panel1Width)
-			_workspaceSplit.SplitterDistance = panel1Width;
+		m_oPendingSelectedRecord = record;
 	}
 
 	private void RefreshCatalog()
 	{
 		if (m_oSettingsService is null || m_oCatalogService is null) return;
-		ApplyCalendarSizing();
 		var settings = m_oSettingsService.Load();
 		_autoSafetyBackupCheckBox.Checked = settings.AutoBackupBeforeRestore;
 		_compareBeforeRestoreCheckBox.Checked = settings.CompareBeforeRestore;
 		var catalog = m_oCatalogService.Refresh(settings.BackupRootPath);
 		_calendar.BoldedDates = catalog.Keys.ToArray();
 		_calendar.UpdateBoldedDates();
-		LoadDate(_calendar.SelectionStart);
+		var selectedDate = m_oPendingSelectedRecord?.CreatedAt.Date ?? _calendar.SelectionStart;
+		_calendar.SetDate(selectedDate);
+		LoadDate(selectedDate);
+		SelectPendingBackup();
 		WatchBackupFolder(settings.BackupRootPath);
 	}
 
@@ -268,6 +198,30 @@ public partial class RecoveryControl : UserControlBase
 		var totalBytes = records.Sum(record => record.SizeBytes);
 		_summaryCountValue.Text = string.Format("백업 {0}개  ·  총 {1}", records.Count, BackupRecord.FormatBytes(totalBytes));
 
+		UpdateSelectedBackupDetails();
+	}
+
+	// [Codex - 2026.09.15] 대시보드에서 전달받은 백업과 같은 날짜·경로의 행을 복원 목록에서 선택한다.
+	private void SelectPendingBackup()
+	{
+		if (m_oPendingSelectedRecord is null)
+			return;
+
+		var pendingPath = m_oPendingSelectedRecord.FullPath;
+		foreach (DataGridViewRow row in _grid.Rows)
+		{
+			if (row.DataBoundItem is not BackupRecord record ||
+				!string.Equals(record.FullPath, pendingPath, StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			_grid.ClearSelection();
+			row.Selected = true;
+			if (row.Cells.Count > 0)
+				_grid.CurrentCell = row.Cells[0];
+			break;
+		}
+
+		m_oPendingSelectedRecord = null;
 		UpdateSelectedBackupDetails();
 	}
 

@@ -19,10 +19,6 @@ public partial class HistoryControl : UserControlBase
     {
         InitializeComponent();
 
-        // 아이콘 배지(IconGlyphs)는 GDI+ Paint 이벤트로 그려서 디자이너가 표현할 수 없는
-        // 부분이라, 디자이너가 그려둔 고정 골격(workspace)에 여기서 덧붙인다.
-        workspace.Controls.Add(BuildSummaryRow());
-
         _calendar.DateSelected += (_, eventArgs) => SelectDate(eventArgs.Start);
         _grid.DataBindingComplete += (_, _) => _emptyStateLabel.Visible = _grid.Rows.Count == 0;
         _grid.CellFormatting += (_, e) =>
@@ -80,54 +76,25 @@ public partial class HistoryControl : UserControlBase
         m_oCatalogService = catalogService;
         m_oComparisonService = comparisonService;
         m_oLoggingService = loggingService;
+        // [Codex - 2026.09.14] 디자이너에는 표시하고 실제 서비스 화면이 생성될 때만 숨긴다.
+        _cancelButton.Visible = false;
     }
 
     public override void OnMenuSelected() => RefreshBackupList();
 
-    /// <summary>상단 "선택된 이력 날짜 / 이력 요약" 카드 두 개 — 원형 아이콘을 코드로 그려야 해서 디자이너로 옮기지 못했다.</summary>
-    private Control BuildSummaryRow()
-    {
-        var row = new Panel { Dock = DockStyle.Top, Height = 92, Padding = new Padding(16, 16, 16, 16) };
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-
-        _summaryDateCaption.Text = "선택된 이력 날짜";
-        var dateIcon = IconGlyphs.CreateBadge(36, ColorRGB.SidebarActive, ColorRGB.Primary, IconGlyphs.Calendar);
-        dateIcon.BackColor = ColorRGB.Surface;
-        var dateCard = ColorRGB.CreateStatCard(dateIcon, _summaryDateCaption, _summaryDateValue);
-        dateCard.Dock = DockStyle.Fill;
-        //dateCard.Margin = new Padding(3); //Padding(0, 0, 8, 0);
-
-        _summaryCountCaption.Text = "이력 요약";
-        var countIcon = IconGlyphs.CreateBadge(36, ColorRGB.SidebarActive, ColorRGB.Primary, IconGlyphs.Archive);
-        countIcon.BackColor = ColorRGB.Surface;
-        var countCard = ColorRGB.CreateStatCard(countIcon, _summaryCountCaption, _summaryCountValue);
-        countCard.Dock = DockStyle.Fill;
-        //countCard.Margin = new Padding(8, 0, 0, 0);
-
-        layout.Controls.Add(dateCard, 0, 0);
-        layout.Controls.Add(countCard, 1, 0);
-        row.Controls.Add(layout);
-        return row;
-    }
-
     private void ConfigureCompareColumns()
     {
-        _grid.Columns.Clear();
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        // [Codex - 2026.09.14] 디자이너에서 조정한 비교 열 설정을 로그 화면 전환 후에도 재사용한다.
+        var columns = new DataGridViewColumn[]
         {
-            HeaderText = "No.",
-            Width = 45,
-            ReadOnly = true,
-            SortMode = DataGridViewColumnSortMode.NotSortable,
-            DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleCenter },
-            HeaderCell = { Style = { Alignment = DataGridViewContentAlignment.MiddleCenter } }
-        });
-        _grid.Columns.Add(new DataGridViewCheckBoxColumn { HeaderText = "적용", DataPropertyName = nameof(XmlDifference.Apply), Width = 78 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "XML 파일", DataPropertyName = nameof(XmlDifference.RelativeFilePath), Width = 150, ReadOnly = true });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "현재", DataPropertyName = nameof(XmlDifference.CurrentValue), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, ReadOnly = true });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "백업", DataPropertyName = nameof(XmlDifference.BackupValue), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, ReadOnly = true });
+            (DataGridViewColumn)m_oNumberColumn.Clone(),
+            (DataGridViewColumn)m_oApplyColumn.Clone(),
+            (DataGridViewColumn)m_oXmlFileColumn.Clone(),
+            (DataGridViewColumn)m_oCurrentColumn.Clone(),
+            (DataGridViewColumn)m_oBackupColumn.Clone()
+        };
+        _grid.Columns.Clear();
+        _grid.Columns.AddRange(columns);
     }
 
     private void ConfigureLogColumns()
@@ -244,28 +211,6 @@ public partial class HistoryControl : UserControlBase
     }
 
     /// <summary>
-    /// MonthCalendar가 실제 화면에 붙어 핸들이 만들어진 뒤에야 PreferredSize가 정확해지므로,
-    /// 화면이 표시될 때마다(= 이 화면으로 올 때마다) 실제 크기를 다시 재서 패널 폭에 반영한다.
-    /// 생성 시점에 미리 계산해 두면(=핸들이 없을 때) 한 달 격자가 깨져서 요일/날짜 줄이 겹쳐 보인다.
-    /// </summary>
-    private void ApplyCalendarSizing()
-    {
-        _calendar.Size = _calendar.PreferredSize;
-        var panel1Width = _calendar.Width + CalendarLeftMargin + 20;
-        if (_workspaceSplit.SplitterDistance != panel1Width)
-            _workspaceSplit.SplitterDistance = panel1Width;
-
-        // 캘린더 아래로 남는 빈 공간을 "이번 달 요약" + "최근 이력 바로가기"로 채운다.
-        var contentTop = _calendar.Bottom + 14;
-        _calendarStatsLabel.Location = new Point(_calendar.Left, contentTop);
-        _calendarStatsLabel.Size = new Size(_calendar.Width, 20);
-        _calendarRecentTitle.Location = new Point(_calendar.Left, contentTop + 26);
-        _calendarRecentTitle.Size = new Size(_calendar.Width, 18);
-        _calendarRecentPanel.Location = new Point(_calendar.Left, contentTop + 46);
-        _calendarRecentPanel.Size = new Size(_calendar.Width, 160);
-    }
-
-    /// <summary>
     /// 캘린더 아래 "이번 달 요약"과 "최근 이력" 바로가기 목록을 갱신한다. referenceDate가 속한
     /// 달을 기준으로 통계를 내고, 전체 기록 중 최근 날짜 5개를 클릭 가능한 링크로 보여준다 —
     /// 클릭하면 그 날짜로 캘린더 선택이 바로 이동한다.
@@ -278,36 +223,51 @@ public partial class HistoryControl : UserControlBase
             entry.Timestamp.Year == referenceDate.Year && entry.Timestamp.Month == referenceDate.Month);
         _calendarStatsLabel.Text = string.Format("이번 달 백업 {0}건  ·  로그 {1}건", monthBackupCount, monthLogCount);
 
-        _calendarRecentPanel.Controls.Clear();
+        // [Codex - 2026.09.14] 디자이너에 배치한 링크를 재사용해 위치/크기 편집값을 유지한다.
         var recentDates = m_oAllRecords.Select(record => record.CreatedAt.Date)
             .Union(m_oAllLogEntries.Select(entry => entry.Timestamp.Date))
             .Distinct()
             .OrderByDescending(date => date)
-            .Take(5);
-        foreach (var date in recentDates)
+            .Take(5)
+            .ToList();
+        var recentLinks = new[]
         {
-            var link = new LinkLabel
+            m_oRecentLink1,
+            m_oRecentLink2,
+            m_oRecentLink3,
+            m_oRecentLink4,
+            m_oRecentLink5
+        };
+        for (var index = 0; index < recentLinks.Length; index++)
+        {
+            var link = recentLinks[index];
+            if (index < recentDates.Count)
             {
-                Text = string.Format("{0:yyyy-MM-dd}", date),
-                AutoSize = true,
-                Font = new Font("맑은 고딕", 8.5F),
-                LinkColor = ColorRGB.Primary,
-                Margin = new Padding(0, 2, 0, 2)
-            };
-            link.Click += (_, _) =>
+                link.Text = string.Format("{0:yyyy-MM-dd}", recentDates[index]);
+                link.Tag = recentDates[index];
+                link.Visible = true;
+            }
+            else
             {
-                _calendar.SelectionStart = date;
-                _calendar.SelectionEnd = date;
-                SelectDate(date);
-            };
-            _calendarRecentPanel.Controls.Add(link);
+                link.Tag = null;
+                link.Visible = false;
+            }
         }
+    }
+
+    /// <summary>디자이너에 배치된 최근 이력 링크를 선택한 날짜로 이동시킨다.</summary>
+    // [Codex - 2026.09.14] 동적 LinkLabel 생성을 제거하고 공통 클릭 처리로 전환한다.
+    private void UiClick_RecentDate(object? sender, EventArgs e)
+    {
+        if (sender is not LinkLabel { Tag: DateTime date }) return;
+        _calendar.SelectionStart = date;
+        _calendar.SelectionEnd = date;
+        SelectDate(date);
     }
 
     private void RefreshBackupList()
     {
         if (m_oSettingsService is null || m_oCatalogService is null) return;
-        ApplyCalendarSizing();
         var settings = m_oSettingsService.Load();
         m_oAllRecords = m_oCatalogService.Refresh(settings.BackupRootPath).Values
             .SelectMany(items => items)

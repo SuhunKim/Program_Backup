@@ -11,19 +11,9 @@ public partial class SettingControl : UserControlBase
 		public required StyledButton RemoveButton { get; init; }
 	}
 
-	// 선별 폴더 행의 [찾기][－] 버튼 크기 — "＋ 폴더 추가" 버튼 폭을 여기에 맞춘다.
-	private const int RowBrowseButtonWidth = 70;
-	private const int RowRemoveButtonWidth = 40;
-	private const int RowButtonGap = 6;
-
 	private ISettingsService? m_oSettingsService;
 	private LogManager? m_oLoggingService;
-	private readonly TextBox m_oProjectText = new();
-	private readonly TextBox m_oExecutableText = new();
-	private readonly TextBox m_oBackupPathText = new();
-	private readonly FlowLayoutPanel m_oFolderRowsPanel = new();
 	private readonly List<SelectiveFolderRow> m_oFolderRows = new();
-	private readonly Label m_oStatusLabel = new();
 
 	public SettingControl()
 	{
@@ -44,40 +34,57 @@ public partial class SettingControl : UserControlBase
 	{
 		m_oSettingsService = settingsService;
 		m_oLoggingService = loggingService;
+		// [Codex - 2026.09.14] 폴더 행 템플릿은 디자이너에서만 보이고 실행 화면에서는 숨긴다.
+		m_oFolderRowTemplate.Visible = false;
 	}
 
 	public override void OnMenuSelected() => LoadSettings();
 
 	private void AddFolderRow(string initialName)
 	{
-		// FlowLayoutPanel은 자식의 Dock을 stretch에 쓰지 않으므로 폭을 직접 관리한다(ResizeFolderRows 참고).
-		var container = new Panel { Width = FolderRowWidth(), Height = 40, Margin = new Padding(0, 0, 0, 6) };
-		var nameText = new TextBox { Text = initialName };
-		ConfigureTextBox(nameText);
+		// [Codex - 2026.09.14] 디자이너의 미리보기 행을 템플릿으로 사용해 수정한 크기와 위치를 반영한다.
+		var container = new Panel
+		{
+			Width = FolderRowWidth(),
+			Height = m_oFolderRowTemplate.Height,
+			Margin = m_oFolderRowTemplate.Margin
+		};
+		var widthOffset = container.Width - m_oFolderRowTemplate.Width;
+		var nameText = new TextBox
+		{
+			Text = initialName,
+			Anchor = m_oFolderNameTemplate.Anchor,
+			Location = m_oFolderNameTemplate.Location,
+			Size = new Size(Math.Max(80, m_oFolderNameTemplate.Width + widthOffset), m_oFolderNameTemplate.Height),
+			Font = m_oFolderNameTemplate.Font,
+			BorderStyle = m_oFolderNameTemplate.BorderStyle
+		};
 
 		var browseButton = new StyledButton
 		{
-			ButtonType = StyledButtonType.Secondary,
-			Text = "찾기",
-			Dock = DockStyle.Right,
-			Width = RowBrowseButtonWidth,
-			Margin = new Padding(RowButtonGap, 0, 0, 0),
-			NormalBackColor = ColorRGB.SecondaryBackground,
-			ForeColor = ColorRGB.Text
+			ButtonType = m_oFolderBrowseTemplate.ButtonType,
+			Text = m_oFolderBrowseTemplate.Text,
+			Anchor = m_oFolderBrowseTemplate.Anchor,
+			Location = new Point(m_oFolderBrowseTemplate.Left + widthOffset, m_oFolderBrowseTemplate.Top),
+			Size = m_oFolderBrowseTemplate.Size,
+			NormalBackColor = m_oFolderBrowseTemplate.NormalBackColor,
+			ForeColor = m_oFolderBrowseTemplate.ForeColor,
+			Cursor = m_oFolderBrowseTemplate.Cursor
 		};
-		browseButton.BorderColor = ColorRGB.Border;
+		browseButton.BorderColor = m_oFolderBrowseTemplate.BorderColor;
 
 		var removeButton = new StyledButton
 		{
-			ButtonType = StyledButtonType.Secondary,
-			Text = "－",
-			Dock = DockStyle.Right,
-			Width = RowRemoveButtonWidth,
-			Margin = new Padding(RowButtonGap, 0, 0, 0),
-			NormalBackColor = ColorRGB.DangerBackground,
-			ForeColor = ColorRGB.Text
+			ButtonType = m_oFolderRemoveTemplate.ButtonType,
+			Text = m_oFolderRemoveTemplate.Text,
+			Anchor = m_oFolderRemoveTemplate.Anchor,
+			Location = new Point(m_oFolderRemoveTemplate.Left + widthOffset, m_oFolderRemoveTemplate.Top),
+			Size = m_oFolderRemoveTemplate.Size,
+			NormalBackColor = m_oFolderRemoveTemplate.NormalBackColor,
+			ForeColor = m_oFolderRemoveTemplate.ForeColor,
+			Cursor = m_oFolderRemoveTemplate.Cursor
 		};
-		removeButton.BorderColor = ColorRGB.Border;
+		removeButton.BorderColor = m_oFolderRemoveTemplate.BorderColor;
 
 		var row = new SelectiveFolderRow { Container = container, NameText = nameText, RemoveButton = removeButton };
 		browseButton.Click += (_, _) => BrowseFolderRow(nameText);
@@ -121,12 +128,16 @@ public partial class SettingControl : UserControlBase
 
 	private void ClearFolderRows()
 	{
-		// 추적 목록(m_oFolderRows)과 실제 패널 자식이 어긋나 있어도 확실히 비워지도록
-		// 패널의 실제 자식 컨트롤 전체를 기준으로 제거한다.
-		var containers = m_oFolderRowsPanel.Controls.OfType<Control>().ToList();
-		m_oFolderRowsPanel.Controls.Clear();
+		// [Codex - 2026.09.14] 숨겨진 디자이너 템플릿은 유지하고 실제 데이터 행만 제거한다.
+		var containers = m_oFolderRowsPanel.Controls
+				.OfType<Control>()
+				.Where(control => !ReferenceEquals(control, m_oFolderRowTemplate))
+				.ToList();
 		foreach (var container in containers)
+		{
+			m_oFolderRowsPanel.Controls.Remove(container);
 			container.Dispose();
+		}
 		m_oFolderRows.Clear();
 	}
 
@@ -237,14 +248,6 @@ public partial class SettingControl : UserControlBase
 		if (Directory.Exists(PreferredBrowseRoot)) return PreferredBrowseRoot;
 		if (Directory.Exists(FallbackBrowseRoot)) return FallbackBrowseRoot;
 		return string.Empty;
-	}
-
-	private static void ConfigureTextBox(TextBox textBox)
-	{
-		textBox.Dock = DockStyle.Fill;
-		textBox.Margin = new Padding(0, 18, 12, 18);
-		textBox.Font = new Font("맑은 고딕", 10F);
-		textBox.BorderStyle = BorderStyle.FixedSingle;
 	}
 
 	private void BrowseExecutable(object? sender, EventArgs e)

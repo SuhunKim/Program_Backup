@@ -1,0 +1,9 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1400, "h": 820, "title": "01 백업" },
+    { "file": "Recovery.dc.html", "x": 1480, "y": 0, "w": 1400, "h": 820, "title": "02 복원" },
+    { "file": "History.dc.html", "x": 0, "y": 940, "w": 1400, "h": 820, "title": "03 이력 관리" },
+    { "file": "Settings.dc.html", "x": 1480, "y": 940, "w": 1400, "h": 820, "title": "04 환경 설정" }
+  ],
+  "launch": { "view": "canvas" }
+}

@@ -11,7 +11,7 @@ namespace PC_BackUp;
 /// </summary>
 internal static class ColorRGB
 {
-    public static readonly Color Background = Color.FromArgb(246, 247, 249);
+    public static readonly Color Background = Color.FromArgb(255, 255, 255);
     public static readonly Color Surface = Color.White;
     public static readonly Color Sidebar = Color.FromArgb(240, 241, 244);
     public static readonly Color SidebarHover = Color.FromArgb(231, 233, 237);
