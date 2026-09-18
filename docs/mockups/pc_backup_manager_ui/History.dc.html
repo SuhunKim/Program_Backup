@@ -1,0 +1,146 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    .pcb-root { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+    .pcb-card { background:#FFFFFF; border:1px solid #DCE8E5; border-radius:8px; box-shadow:0 1px 2px rgba(36,49,56,0.04); }
+    .pcb-btn-primary { background:#2FA894; color:#fff; border:none; border-radius:6px; padding:9px 22px; font-size:13.5px; font-weight:600; cursor:pointer; font-family:inherit; white-space:nowrap; }
+    .pcb-btn-primary:hover { background:#268F7E; }
+    .pcb-btn-primary:active { background:#1F7A6B; }
+    .pcb-btn-secondary { background:#FFFFFF; color:#243138; border:1px solid #DCE8E5; border-radius:6px; padding:9px 22px; font-size:13.5px; font-weight:600; cursor:pointer; font-family:inherit; white-space:nowrap; }
+    .pcb-btn-secondary:hover { background:#EAF5F2; }
+    .pcb-btn-text { background:none; border:none; color:#2FA894; font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit; padding:6px 4px; }
+    .pcb-btn-text:hover { color:#1F7A6B; text-decoration:underline; }
+    .pcb-checkbox { width:16px; height:16px; border-radius:4px; border:1.6px solid #B9CFC9; display:inline-flex; align-items:center; justify-content:center; background:#fff; flex-shrink:0; }
+    .pcb-checkbox--on { border-color:#2FA894; background:#2FA894; }
+    .pcb-select { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 14px; border:1px solid #DCE8E5; border-radius:6px; background:#fff; font-size:13px; color:#243138; flex:1; }
+    .pcb-nav-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:7px; text-decoration:none; font-size:13.5px; font-weight:500; color:#243138; }
+    .pcb-nav-item:hover { background:#E0F0EC; }
+    .pcb-nav-item--active { background:#D6EEE7; color:#1F7A6B; font-weight:600; }
+    .pcb-nav-item--active:hover { background:#D6EEE7; }
+    a { color:#2FA894; text-decoration:none; }
+    a:hover { color:#1F7A6B; }
+  </style>
+</helmet>
+<div class="pcb-root" style="width:1400px;height:820px;background:#F2F8F6;display:flex;overflow:hidden;color:#243138;">
+
+  <aside style="width:220px;min-width:220px;background:#EAF5F2;border-right:1px solid #DCE8E5;display:flex;flex-direction:column;height:100%;">
+    <div style="display:flex;align-items:center;gap:10px;padding:22px 20px 20px;">
+      <div style="width:36px;height:36px;border-radius:9px;background:#2FA894;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M6 15h8a3 3 0 0 0 .5-5.96A4.5 4.5 0 0 0 6.1 8.51 3.5 3.5 0 0 0 6 15Z" stroke="white" stroke-width="1.6" stroke-linejoin="round"/><path d="M10 12V7m0 0-2 2m2-2 2 2" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div style="display:flex;flex-direction:column;line-height:1.25;">
+        <span style="font-size:13px;font-weight:700;color:#243138;letter-spacing:0.02em;">PC BACKUP</span>
+        <span style="font-size:13px;font-weight:700;color:#243138;letter-spacing:0.02em;">MANAGER</span>
+      </div>
+    </div>
+    <nav style="display:flex;flex-direction:column;gap:2px;padding:8px 12px;flex:1;">
+      <a href="#" class="pcb-nav-item">
+        <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M6 15h8a3 3 0 0 0 .5-5.96A4.5 4.5 0 0 0 6.1 8.51 3.5 3.5 0 0 0 6 15Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M10 12V7m0 0-2 2m2-2 2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        01 백업
+      </a>
+      <a href="#" class="pcb-nav-item">
+        <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M4 10a6 6 0 1 1 1.76 4.24" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M4 14v-3h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        02 복원
+      </a>
+      <a href="#" class="pcb-nav-item pcb-nav-item--active">
+        <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M10 7v3.5l2.5 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        03 이력 관리
+      </a>
+      <a href="#" class="pcb-nav-item">
+        <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="2.6" stroke="currentColor" stroke-width="1.5"/><path d="M10 3.5v1.6M10 14.9v1.6M16.5 10h-1.6M5.1 10H3.5M14.6 5.4l-1.13 1.13M6.53 13.47 5.4 14.6M14.6 14.6l-1.13-1.13M6.53 6.53 5.4 5.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        04 환경 설정
+      </a>
+    </nav>
+    <div style="padding:16px 20px;border-top:1px solid #DCE8E5;font-size:11.5px;color:#6B7B82;">v0.1 Foundation</div>
+  </aside>
+
+  <main style="flex:1;display:flex;flex-direction:column;min-width:0;">
+    <header style="padding:22px 32px 18px;border-bottom:1px solid #DCE8E5;background:#FFFFFF;">
+      <div style="font-size:20px;font-weight:700;color:#243138;">이력 관리</div>
+      <div style="font-size:13px;color:#6B7B82;margin-top:4px;">백업 간 XML 설정 변경점을 비교하고 선택 적용합니다.</div>
+    </header>
+
+    <div style="flex:1;overflow:auto;padding:24px 32px;display:flex;flex-direction:column;gap:16px;">
+
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="pcb-select">
+          <span>2026-09-05 09:20 (전체)  &#8596;  2026-09-14 09:15 (전체)</span>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="flex-shrink:0;"><path d="M4 6l4 4 4-4" stroke="#6B7B82" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <button class="pcb-btn-secondary">즉시 백업</button>
+        <button class="pcb-btn-secondary">작업 로그</button>
+        <button class="pcb-btn-primary">XML 비교</button>
+      </div>
+
+      <div class="pcb-card" style="padding:0;overflow:hidden;">
+        <div style="display:grid;grid-template-columns:40px 1.3fr 1fr 1fr;padding:10px 18px;background:#F2F8F6;border-bottom:1px solid #DCE8E5;font-size:11.5px;color:#6B7B82;align-items:center;">
+          <span class="pcb-checkbox"></span><span>항목명</span><span>현재 값</span><span>백업 값</span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:40px 1.3fr 1fr 1fr;padding:12px 18px;border-bottom:1px solid #EAF5F2;align-items:center;font-size:12.5px;color:#243138;">
+          <span class="pcb-checkbox pcb-checkbox--on"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5l3 3 6-6.5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span>
+            <span style="display:block;font-weight:600;">BackupRoot</span>
+            <span style="display:block;font-size:11px;color:#6B7B82;margin-top:2px;">Config\PCBackupSettings.xml</span>
+          </span>
+          <span>D:\_program\PLCSimulator</span>
+          <span style="font-weight:600;color:#1F7A6B;">D:\_program\PLCSimulator_old</span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:40px 1.3fr 1fr 1fr;padding:12px 18px;border-bottom:1px solid #EAF5F2;align-items:center;font-size:12.5px;color:#243138;">
+          <span class="pcb-checkbox"></span>
+          <span>
+            <span style="display:block;font-weight:600;">Network/Port</span>
+            <span style="display:block;font-size:11px;color:#6B7B82;margin-top:2px;">Config\App.xml</span>
+          </span>
+          <span>8080</span>
+          <span>8080</span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:40px 1.3fr 1fr 1fr;padding:12px 18px;border-bottom:1px solid #EAF5F2;align-items:center;font-size:12.5px;color:#243138;">
+          <span class="pcb-checkbox pcb-checkbox--on"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5l3 3 6-6.5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span>
+            <span style="display:block;font-weight:600;">Logging/Level</span>
+            <span style="display:block;font-size:11px;color:#6B7B82;margin-top:2px;">Config\App.xml</span>
+          </span>
+          <span>Info</span>
+          <span style="font-weight:600;color:#1F7A6B;">Debug</span>
+        </div>
+      </div>
+
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-size:12px;color:#6B7B82;">비교 완료 &#8212; 3건 중 2건 변경 감지</span>
+        </div>
+        <div style="height:6px;background:#EAF5F2;border-radius:999px;overflow:hidden;">
+          <div style="height:100%;width:100%;background:#2FA894;border-radius:999px;"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div style="padding:14px 32px;border-top:1px solid #DCE8E5;background:#FFFFFF;display:flex;justify-content:space-between;align-items:center;">
+      <div style="display:flex;gap:14px;">
+        <button class="pcb-btn-text">전체 선택/해제</button>
+        <button class="pcb-btn-text">차이점 요약</button>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button class="pcb-btn-secondary">취소</button>
+        <button class="pcb-btn-primary">선택 설정 적용</button>
+      </div>
+    </div>
+  </main>
+
+</div>
+</x-dc>
+</body>
+</html>

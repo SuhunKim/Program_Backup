@@ -20,6 +20,9 @@
     <Compile Update="MainForm.Designer.cs">
       <DependentUpon>MainForm.cs</DependentUpon>
     </Compile>
+    <Compile Update="Kernel\GUI\00_Dashboard\00_Dashboard.Designer.cs">
+      <DependentUpon>00_Dashboard.cs</DependentUpon>
+    </Compile>
     <Compile Update="Kernel\GUI\01_Backup\01_BackupControl.Designer.cs">
       <DependentUpon>01_BackupControl.cs</DependentUpon>
     </Compile>
@@ -40,6 +43,9 @@
     </Compile>
     <EmbeddedResource Update="_util\Component\StyledButton.resx">
       <DependentUpon>StyledButton.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Kernel\GUI\00_Dashboard\00_Dashboard.resx">
+      <DependentUpon>00_Dashboard.cs</DependentUpon>
     </EmbeddedResource>
     <Compile Update="_util\Component\MainMenuControl.cs">
       <SubType>UserControl</SubType>

@@ -12,6 +12,7 @@ public partial class RecoveryControl : UserControlBase
 	private LogManager? m_oLoggingService;
 	private bool m_bIsBusy;
 	private CancellationTokenSource? m_oCancellationTokenSource;
+	private BackupRecord? m_oPendingSelectedRecord;
 	private readonly System.Windows.Forms.Timer m_oRefreshDebounceTimer = new() { Interval = 500 };
 	private FileSystemWatcher? m_oBackupFolderWatcher;
 
@@ -63,6 +64,14 @@ public partial class RecoveryControl : UserControlBase
 	}
 
 	public override void OnMenuSelected() => RefreshCatalog();
+
+	/// <summary>
+	/// 대시보드에서 선택한 백업을 다음 복원 화면 진입 시 선택한다.
+	/// </summary>
+	public void SelectBackupOnNextDisplay(BackupRecord record)
+	{
+		m_oPendingSelectedRecord = record;
+	}
 
 	/// <summary>상단 "선택된 백업 날짜 / 백업 요약" 카드 두 개 — 원형 아이콘을 코드로 그려야 해서 디자이너로 옮기지 못했다.</summary>
 	private Control BuildSummaryRow()
@@ -150,8 +159,35 @@ public partial class RecoveryControl : UserControlBase
 		var catalog = m_oCatalogService.Refresh(settings.BackupRootPath);
 		_calendar.BoldedDates = catalog.Keys.ToArray();
 		_calendar.UpdateBoldedDates();
-		LoadDate(_calendar.SelectionStart);
+		var selectedDate = m_oPendingSelectedRecord?.CreatedAt.Date ?? _calendar.SelectionStart;
+		_calendar.SetDate(selectedDate);
+		LoadDate(selectedDate);
+		SelectPendingBackup();
 		WatchBackupFolder(settings.BackupRootPath);
+	}
+
+	// [Codex - 2026.09.18] 대시보드에서 전달된 백업과 같은 경로의 행을 다시 선택한다.
+	private void SelectPendingBackup()
+	{
+		if (m_oPendingSelectedRecord is null)
+			return;
+
+		var pendingPath = m_oPendingSelectedRecord.FullPath;
+		foreach (DataGridViewRow row in _grid.Rows)
+		{
+			if (row.DataBoundItem is not BackupRecord record ||
+				!string.Equals(record.FullPath, pendingPath, StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			_grid.ClearSelection();
+			row.Selected = true;
+			if (row.Cells.Count > 0)
+				_grid.CurrentCell = row.Cells[0];
+			break;
+		}
+
+		m_oPendingSelectedRecord = null;
+		UpdateSelectedBackupDetails();
 	}
 
 	/// <summary>
