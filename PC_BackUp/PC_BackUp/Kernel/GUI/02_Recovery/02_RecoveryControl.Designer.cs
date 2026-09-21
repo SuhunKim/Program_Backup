@@ -117,6 +117,8 @@ partial class RecoveryControl
         workspace.Controls.Add(_workspaceSplit);
         workspace.Controls.Add(actionPanel);
         workspace.Controls.Add(detailsPanel);
+        // [Codex - 2026.09.21] 상단 요약 카드와 본문이 겹치지 않도록 본문 영역을 도킹한다.
+        workspace.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         workspace.Location = new Point(0, 100);
         workspace.Name = "workspace";
         workspace.Padding = new Padding(16);
@@ -126,6 +128,7 @@ partial class RecoveryControl
         // _workspaceSplit
         // 
         _workspaceSplit.BackColor = Color.FromArgb(224, 226, 231);
+        _workspaceSplit.Dock = DockStyle.Fill;
         _workspaceSplit.FixedPanel = FixedPanel.Panel1;
         _workspaceSplit.IsSplitterFixed = true;
         _workspaceSplit.Location = new Point(20, 5);
@@ -134,12 +137,19 @@ partial class RecoveryControl
         // _workspaceSplit.Panel1
         // 
         _workspaceSplit.Panel1.BackColor = Color.White;
+        _workspaceSplit.Panel1.Controls.Add(_calendar);
         _workspaceSplit.Panel1.Controls.Add(calendarTitle);
+        _calendar.Location = new Point(CalendarLeftMargin, CalendarTitleHeight);
+        _calendar.MaxSelectionCount = 1;
+        _calendar.ShowTodayCircle = true;
         // 
         // _workspaceSplit.Panel2
         // 
         _workspaceSplit.Panel2.BackColor = Color.White;
         _workspaceSplit.Panel2.Padding = new Padding(18, 0, 0, 0);
+        _workspaceSplit.Panel2.Controls.Add(_grid);
+        _workspaceSplit.Panel2.Controls.Add(_emptyLabel);
+        _workspaceSplit.Panel2.Controls.Add(_dateLabel);
         _workspaceSplit.Size = new Size(968, 306);
         _workspaceSplit.SplitterDistance = 121;
         _workspaceSplit.TabIndex = 0;
@@ -154,6 +164,40 @@ partial class RecoveryControl
         calendarTitle.Size = new Size(121, 23);
         calendarTitle.TabIndex = 0;
         calendarTitle.Text = "백업 날짜";
+        // [Codex - 2026.09.21] 이슈 6 레이아웃 변경에서 누락된 백업 목록 컨트롤을 복원한다.
+        _dateLabel.Dock = DockStyle.Top;
+        _dateLabel.Height = 36;
+        _dateLabel.Font = new Font("맑은 고딕", 11F, FontStyle.Bold);
+        _dateLabel.ForeColor = ColorRGB.Text;
+        _emptyLabel.Dock = DockStyle.Fill;
+        _emptyLabel.Text = "선택한 날짜에 백업 기록이 없습니다.";
+        _emptyLabel.ForeColor = ColorRGB.MutedText;
+        _emptyLabel.TextAlign = ContentAlignment.MiddleCenter;
+        _grid.Dock = DockStyle.Fill;
+        _grid.BackgroundColor = ColorRGB.Surface;
+        _grid.BorderStyle = BorderStyle.None;
+        _grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
+        _grid.GridColor = ColorRGB.Border;
+        _grid.RowHeadersVisible = false;
+        _grid.AllowUserToAddRows = false;
+        _grid.AllowUserToDeleteRows = false;
+        _grid.AllowUserToResizeRows = false;
+        _grid.AutoGenerateColumns = false;
+        _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        _grid.MultiSelect = false;
+        _grid.RowTemplate.Height = 36;
+        _grid.ColumnHeadersHeight = 40;
+        _grid.ColumnHeadersDefaultCellStyle.BackColor = ColorRGB.GridHeaderBackground;
+        _grid.ColumnHeadersDefaultCellStyle.ForeColor = ColorRGB.Text;
+        _grid.ColumnHeadersDefaultCellStyle.Font = new Font("맑은 고딕", 9F, FontStyle.Bold);
+        _grid.EnableHeadersVisualStyles = false;
+        _grid.DefaultCellStyle.SelectionBackColor = ColorRGB.SidebarActive;
+        _grid.DefaultCellStyle.SelectionForeColor = ColorRGB.Text;
+        _grid.ReadOnly = true;
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "시간", DataPropertyName = nameof(BackupRecord.TimeText), Width = 100 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "백업 형태", DataPropertyName = nameof(BackupRecord.KindText), Width = 130 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "파일명", DataPropertyName = nameof(BackupRecord.FileName), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "크기", DataPropertyName = nameof(BackupRecord.SizeText), Width = 100 });
         // 
         // detailsPanel
         // 
@@ -173,6 +217,42 @@ partial class RecoveryControl
         selectedBackupCardPanel.Padding = new Padding(16, 10, 16, 10);
         selectedBackupCardPanel.Size = new Size(952, 174);
         selectedBackupCardPanel.TabIndex = 0;
+        _selectedBackupLabel.Dock = DockStyle.Top;
+        _selectedBackupLabel.Height = 24;
+        _selectedBackupLabel.Font = new Font("맑은 고딕", 10F, FontStyle.Bold);
+        _selectedBackupLabel.ForeColor = ColorRGB.Text;
+        _selectedBackupMetaLabel.Dock = DockStyle.Top;
+        _selectedBackupMetaLabel.Height = 22;
+        _selectedBackupMetaLabel.ForeColor = ColorRGB.MutedText;
+        _restoreTargetLabel.Dock = DockStyle.Top;
+        _restoreTargetLabel.Height = 22;
+        _restoreTargetLabel.ForeColor = ColorRGB.MutedText;
+        _comparisonResultLabel.Dock = DockStyle.Top;
+        _comparisonResultLabel.Height = 42;
+        _comparisonResultLabel.ForeColor = ColorRGB.MutedText;
+        _comparisonResultLabel.AutoEllipsis = true;
+        _comparisonListBox.Dock = DockStyle.Fill;
+        _comparisonListBox.BorderStyle = BorderStyle.None;
+        _comparisonListBox.BackColor = ColorRGB.DetailPanelBackground;
+        _comparisonListBox.ForeColor = ColorRGB.MutedText;
+        _comparisonListBox.Font = new Font("맑은 고딕", 8.5F);
+        _autoSafetyBackupCheckBox.Dock = DockStyle.Top;
+        _autoSafetyBackupCheckBox.Height = 26;
+        _autoSafetyBackupCheckBox.Text = "복원 전 현재 상태를 자동 ZIP 백업";
+        _autoSafetyBackupCheckBox.ForeColor = ColorRGB.Text;
+        _autoSafetyBackupCheckBox.CheckedChanged += UiChange_AutoSafetyBackup;
+        _compareBeforeRestoreCheckBox.Dock = DockStyle.Top;
+        _compareBeforeRestoreCheckBox.Height = 26;
+        _compareBeforeRestoreCheckBox.Text = "복원 전 현재 파일과 비교";
+        _compareBeforeRestoreCheckBox.ForeColor = ColorRGB.Text;
+        _compareBeforeRestoreCheckBox.CheckedChanged += UiChange_CompareBeforeRestore;
+        selectedBackupCardPanel.Controls.Add(_autoSafetyBackupCheckBox);
+        selectedBackupCardPanel.Controls.Add(_compareBeforeRestoreCheckBox);
+        selectedBackupCardPanel.Controls.Add(_comparisonListBox);
+        selectedBackupCardPanel.Controls.Add(_comparisonResultLabel);
+        selectedBackupCardPanel.Controls.Add(_restoreTargetLabel);
+        selectedBackupCardPanel.Controls.Add(_selectedBackupMetaLabel);
+        selectedBackupCardPanel.Controls.Add(_selectedBackupLabel);
         // 
         // detailsGap
         // 
@@ -186,11 +266,15 @@ partial class RecoveryControl
         // 
         actionPanel.Controls.Add(_cancelButton);
         actionPanel.Controls.Add(_restoreButton);
+        actionPanel.Controls.Add(_progress);
+        actionPanel.Dock = DockStyle.Bottom;
         actionPanel.Location = new Point(20, 497);
         actionPanel.Name = "actionPanel";
         actionPanel.Padding = new Padding(0, 12, 0, 0);
         actionPanel.Size = new Size(960, 66);
         actionPanel.TabIndex = 1;
+        _progress.Dock = DockStyle.Top;
+        _progress.Height = 6;
         // 
         // _cancelButton
         // 

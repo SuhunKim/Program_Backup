@@ -63,10 +63,11 @@ partial class BackupControl
         body.Controls.Add(action);
         body.Controls.Add(optionCard);
         body.Controls.Add(statusCard);
-        body.Dock = DockStyle.Fill;
-        body.Location = new Point(0, 0);
+        // [Codex - 2026.09.21] 본문이 상단 제목 영역을 덮지 않도록 다른 메뉴와 같은 위치에서 시작한다.
+        body.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         body.Name = "body";
-        body.Size = new Size(1000, 700);
+        body.Location = new Point(0, 100);
+        body.Size = new Size(1000, 600);
         body.TabIndex = 0;
         // 
         // action
@@ -303,8 +304,8 @@ partial class BackupControl
         // 
         // BackupControl
         // 
-        Controls.Add(headerPanel);
         Controls.Add(body);
+        Controls.Add(headerPanel);
         Name = "BackupControl";
         Size = new Size(1000, 700);
         body.ResumeLayout(false);

@@ -8,8 +8,7 @@ partial class HistoryControl
     // 디자이너에서도 그대로 열어서 확인할 수 있게 한다. 아래 두 가지는 예외로 코드에만 남긴다:
     //  1) 상단 요약 카드의 원형 아이콘(IconGlyphs) — GDI+로 직접 그리는 Paint 이벤트라 디자이너가
     //     표현할 수 없다. HistoryControl() 생성자에서 InitializeComponent() 이후에 붙인다.
-    //  2) MonthCalendar의 실제 크기(ApplyCalendarSizing) — DPI에 따라 화면에 실제로 표시된 뒤에만
-    //     정확히 잴 수 있어서 RefreshBackupList()에서 매번 다시 계산한다.
+    //  2) 이력 달력의 실제 크기(ApplyCalendarSizing) — 화면 진입 시 왼쪽 패널 폭에 반영한다.
     //  3) 그리드 열은 비교 화면/작업 로그 화면이 서로 바뀌므로, 여기서는 기본값(비교 화면 열)만
     //     잡아두고 실제 전환은 ConfigureCompareColumns()/ConfigureLogColumns()가 담당한다.
     private Panel headerPanel = null!;
@@ -39,7 +38,7 @@ partial class HistoryControl
     private readonly DataGridView _existenceGrid = new();
     private readonly Label _summaryLabel = new();
     private readonly ProgressBar _progress = new();
-    private readonly MonthCalendar _calendar = new();
+    private readonly HistoryCalendar _calendar = new();
     private readonly Label _calendarStatsLabel = new();
     private readonly Label _calendarRecentTitle = new();
     private readonly FlowLayoutPanel _calendarRecentPanel = new();
@@ -124,6 +123,8 @@ partial class HistoryControl
         workspace.BackColor = Color.White;
         workspace.Controls.Add(_workspaceSplit);
         workspace.Controls.Add(bottomBar);
+        // [Codex - 2026.09.21] 요약 카드가 추가되어도 본문을 덮지 않도록 영역을 도킹한다.
+        workspace.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         workspace.Location = new Point(0, 100);
         workspace.Name = "workspace";
         workspace.Padding = new Padding(1);
@@ -133,6 +134,7 @@ partial class HistoryControl
         // _workspaceSplit
         // 
         _workspaceSplit.BackColor = Color.FromArgb(224, 226, 231);
+        _workspaceSplit.Dock = DockStyle.Fill;
         _workspaceSplit.FixedPanel = FixedPanel.Panel1;
         _workspaceSplit.IsSplitterFixed = true;
         _workspaceSplit.Location = new Point(20, 5);
@@ -141,7 +143,21 @@ partial class HistoryControl
         // _workspaceSplit.Panel1
         // 
         _workspaceSplit.Panel1.BackColor = Color.White;
+        // [Codex - 2026.09.21] 이력 달력과 월간 요약을 왼쪽 패널에 배치한다.
+        _workspaceSplit.Panel1.Controls.Add(_calendarRecentPanel);
+        _workspaceSplit.Panel1.Controls.Add(_calendarRecentTitle);
+        _workspaceSplit.Panel1.Controls.Add(_calendarStatsLabel);
+        _workspaceSplit.Panel1.Controls.Add(_calendar);
         _workspaceSplit.Panel1.Controls.Add(calendarTitle);
+        _calendar.Location = new Point(CalendarLeftMargin, CalendarTitleHeight);
+        _calendarStatsLabel.Font = new Font("맑은 고딕", 8.5F);
+        _calendarStatsLabel.ForeColor = ColorRGB.MutedText;
+        _calendarRecentTitle.Text = "최근 이력";
+        _calendarRecentTitle.Font = new Font("맑은 고딕", 9F, FontStyle.Bold);
+        _calendarRecentTitle.ForeColor = ColorRGB.Text;
+        _calendarRecentPanel.FlowDirection = FlowDirection.TopDown;
+        _calendarRecentPanel.WrapContents = false;
+        _calendarRecentPanel.AutoScroll = true;
         // 
         // _workspaceSplit.Panel2
         // 
@@ -171,6 +187,38 @@ partial class HistoryControl
         gridHost.Name = "gridHost";
         gridHost.Size = new Size(835, 363);
         gridHost.TabIndex = 0;
+        // [Codex - 2026.09.21] 이슈 6 레이아웃에서 빠진 그리드와 빈 상태 표시를 다시 연결한다.
+        _grid.Dock = DockStyle.Fill;
+        _grid.BackgroundColor = ColorRGB.Surface;
+        _grid.BorderStyle = BorderStyle.None;
+        _grid.AutoGenerateColumns = false;
+        _grid.AllowUserToAddRows = false;
+        _grid.AllowUserToDeleteRows = false;
+        _grid.RowHeadersVisible = false;
+        _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        _grid.MultiSelect = false;
+        _emptyStateLabel.Dock = DockStyle.Fill;
+        _emptyStateLabel.Text = "비교할 백업을 선택한 뒤 XML 비교를 실행하세요.";
+        _emptyStateLabel.TextAlign = ContentAlignment.MiddleCenter;
+        _emptyStateLabel.ForeColor = ColorRGB.MutedText;
+        _existenceHost.Dock = DockStyle.Top;
+        _existenceHost.Height = 150;
+        _existenceHost.Visible = false;
+        _existenceTitleLabel.Dock = DockStyle.Top;
+        _existenceTitleLabel.Height = 24;
+        _existenceTitleLabel.Text = "파일/폴더 존재 차이";
+        _existenceGrid.Dock = DockStyle.Fill;
+        _existenceGrid.AutoGenerateColumns = false;
+        _existenceGrid.AllowUserToAddRows = false;
+        _existenceGrid.RowHeadersVisible = false;
+        _existenceGrid.Columns.Add(new DataGridViewCheckBoxColumn { HeaderText = "적용", DataPropertyName = nameof(XmlDifference.Apply), Width = 58 });
+        _existenceGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "상태", DataPropertyName = nameof(XmlDifference.Kind), Width = 110, ReadOnly = true });
+        _existenceGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "경로", DataPropertyName = nameof(XmlDifference.RelativeFilePath), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, ReadOnly = true });
+        _existenceHost.Controls.Add(_existenceGrid);
+        _existenceHost.Controls.Add(_existenceTitleLabel);
+        gridHost.Controls.Add(_grid);
+        gridHost.Controls.Add(_emptyStateLabel);
+        gridHost.Controls.Add(_existenceHost);
         // 
         // selectionBar
         // 
@@ -193,6 +241,35 @@ partial class HistoryControl
         backupSelectorPanel.Name = "backupSelectorPanel";
         backupSelectorPanel.Size = new Size(617, 68);
         backupSelectorPanel.TabIndex = 0;
+        _sourceRow.Dock = DockStyle.Top;
+        _sourceRow.Height = 30;
+        _sourceComboLabel.Dock = DockStyle.Left;
+        _sourceComboLabel.Width = 62;
+        _sourceComboLabel.Text = "Source :";
+        _sourceComboLabel.TextAlign = ContentAlignment.MiddleLeft;
+        _sourceIsCurrentCheckBox.Dock = DockStyle.Left;
+        _sourceIsCurrentCheckBox.Width = 150;
+        _sourceIsCurrentCheckBox.Text = "현재 적용된 파일 기준";
+        _sourceIsCurrentCheckBox.Checked = true;
+        _sourceIsCurrentCheckBox.CheckedChanged += UiChange_SourceIsCurrent;
+        _sourceCombo.Dock = DockStyle.Fill;
+        _sourceCombo.DropDownStyle = ComboBoxStyle.DropDownList;
+        _sourceCombo.Enabled = false;
+        _sourceRow.Controls.Add(_sourceCombo);
+        _sourceRow.Controls.Add(_sourceIsCurrentCheckBox);
+        _sourceRow.Controls.Add(_sourceComboLabel);
+        _destinationRow.Dock = DockStyle.Top;
+        _destinationRow.Height = 30;
+        _backupComboLabel.Dock = DockStyle.Left;
+        _backupComboLabel.Width = 62;
+        _backupComboLabel.Text = "Dest :";
+        _backupComboLabel.TextAlign = ContentAlignment.MiddleLeft;
+        _backupCombo.Dock = DockStyle.Fill;
+        _backupCombo.DropDownStyle = ComboBoxStyle.DropDownList;
+        _destinationRow.Controls.Add(_backupCombo);
+        _destinationRow.Controls.Add(_backupComboLabel);
+        backupSelectorPanel.Controls.Add(_destinationRow);
+        backupSelectorPanel.Controls.Add(_sourceRow);
         // 
         // _logViewButton
         // 
@@ -234,6 +311,15 @@ partial class HistoryControl
         // 
         bottomBar.Controls.Add(_cancelButton);
         bottomBar.Controls.Add(_applyButton);
+        _summaryLabel.Dock = DockStyle.Fill;
+        _summaryLabel.Text = "백업을 선택하고 XML 비교를 실행하세요.";
+        _summaryLabel.TextAlign = ContentAlignment.MiddleLeft;
+        _summaryLabel.ForeColor = ColorRGB.MutedText;
+        _progress.Dock = DockStyle.Top;
+        _progress.Height = 6;
+        bottomBar.Controls.Add(_summaryLabel);
+        bottomBar.Controls.Add(_progress);
+        bottomBar.Dock = DockStyle.Bottom;
         bottomBar.Location = new Point(20, 497);
         bottomBar.Name = "bottomBar";
         bottomBar.Padding = new Padding(0, 12, 0, 0);

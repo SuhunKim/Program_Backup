@@ -70,6 +70,7 @@ partial class SettingControl
         body.Location = new Point(0, 104);
         body.Name = "body";
         body.Padding = new Padding(0, 0, 0, 12);
+        body.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         body.Size = new Size(1000, 596);
         body.TabIndex = 0;
         // 
@@ -82,7 +83,7 @@ partial class SettingControl
         card.Location = new Point(0, 0);
         card.Name = "card";
         card.Padding = new Padding(28, 20, 28, 20);
-        card.Size = new Size(960, 462);
+        card.Size = new Size(960, 477);
         card.TabIndex = 0;
         // 
         // divider
@@ -96,13 +97,14 @@ partial class SettingControl
         // 
         // folderSection
         // 
+        folderSection.Controls.Add(m_oFolderRowsPanel);
         folderSection.Controls.Add(dropZonePanel);
         folderSection.Controls.Add(folderTitleBar);
         folderSection.Dock = DockStyle.Top;
         folderSection.Location = new Point(28, 23);
         folderSection.Name = "folderSection";
         folderSection.Padding = new Padding(0, 10, 0, 0);
-        folderSection.Size = new Size(904, 274);
+        folderSection.Size = new Size(904, 220);
         folderSection.TabIndex = 1;
         // 
         // dropZonePanel
@@ -130,6 +132,11 @@ partial class SettingControl
         dropZoneLabel.TabIndex = 0;
         dropZoneLabel.Text = "여기에 폴더를 끌어다 놓아 추가";
         dropZoneLabel.TextAlign = ContentAlignment.MiddleCenter;
+        m_oFolderRowsPanel.Dock = DockStyle.Top;
+        m_oFolderRowsPanel.Height = 140;
+        m_oFolderRowsPanel.AutoScroll = true;
+        m_oFolderRowsPanel.FlowDirection = FlowDirection.TopDown;
+        m_oFolderRowsPanel.WrapContents = false;
         // 
         // folderTitleBar
         // 
@@ -173,10 +180,18 @@ partial class SettingControl
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180F));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105F));
+        // [Codex - 2026.09.21] 이슈 6 레이아웃 변경에서 빠진 설정 입력 컨트롤을 다시 연결한다.
+        ConfigureTextBox(m_oProjectText);
+        ConfigureTextBox(m_oExecutableText);
+        ConfigureTextBox(m_oBackupPathText);
         table.Controls.Add(projectFieldLabel, 0, 0);
+        table.Controls.Add(m_oProjectText, 1, 0);
+        table.SetColumnSpan(m_oProjectText, 2);
         table.Controls.Add(executableFieldLabel, 0, 1);
+        table.Controls.Add(m_oExecutableText, 1, 1);
         table.Controls.Add(executableBrowseButton, 2, 1);
         table.Controls.Add(backupPathFieldLabel, 0, 2);
+        table.Controls.Add(m_oBackupPathText, 1, 2);
         table.Controls.Add(backupBrowseButton, 2, 2);
         table.Dock = DockStyle.Top;
         table.Location = new Point(28, 20);
@@ -185,7 +200,7 @@ partial class SettingControl
         table.RowStyles.Add(new RowStyle(SizeType.Absolute, 72F));
         table.RowStyles.Add(new RowStyle(SizeType.Absolute, 72F));
         table.RowStyles.Add(new RowStyle(SizeType.Absolute, 72F));
-        table.Size = new Size(904, 3);
+        table.Size = new Size(904, 216);
         table.TabIndex = 2;
         // 
         // projectFieldLabel
@@ -295,12 +310,18 @@ partial class SettingControl
         // actionPanel
         // 
         actionPanel.BackColor = Color.FromArgb(255, 255, 255);
+        actionPanel.Controls.Add(m_oStatusLabel);
         actionPanel.Controls.Add(saveButton);
-        actionPanel.Location = new Point(20, 500);
+        actionPanel.Dock = DockStyle.Bottom;
+        actionPanel.Location = new Point(20, 530);
         actionPanel.Name = "actionPanel";
         actionPanel.Padding = new Padding(0, 14, 0, 10);
         actionPanel.Size = new Size(960, 66);
         actionPanel.TabIndex = 1;
+        m_oStatusLabel.Dock = DockStyle.Fill;
+        m_oStatusLabel.ForeColor = ColorRGB.MutedText;
+        m_oStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
+        m_oStatusLabel.AutoEllipsis = true;
         // 
         // saveButton
         // 

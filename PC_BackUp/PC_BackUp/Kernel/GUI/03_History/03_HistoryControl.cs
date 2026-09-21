@@ -18,12 +18,16 @@ public partial class HistoryControl : UserControlBase
     public HistoryControl()
     {
         InitializeComponent();
+        // [Codex - 2026.09.21] 디자이너 재배치 후 비어 있던 비교 그리드의 기본 열을 복원한다.
+        ConfigureCompareColumns();
 
         // 아이콘 배지(IconGlyphs)는 GDI+ Paint 이벤트로 그려서 디자이너가 표현할 수 없는
         // 부분이라, 디자이너가 그려둔 고정 골격(workspace)에 여기서 덧붙인다.
         workspace.Controls.Add(BuildSummaryRow());
 
-        _calendar.DateSelected += (_, eventArgs) => SelectDate(eventArgs.Start);
+        // [Codex - 2026.09.21] 커스텀 달력의 선택/월 이동을 기존 이력 조회 흐름에 연결한다.
+        _calendar.DateSelected += (_, date) => SelectDate(date);
+        _calendar.DisplayedMonthChanged += (_, month) => UpdateCalendarSidebar(month);
         _grid.DataBindingComplete += (_, _) => _emptyStateLabel.Visible = _grid.Rows.Count == 0;
         _grid.CellFormatting += (_, e) =>
         {
@@ -244,9 +248,7 @@ public partial class HistoryControl : UserControlBase
     }
 
     /// <summary>
-    /// MonthCalendar가 실제 화면에 붙어 핸들이 만들어진 뒤에야 PreferredSize가 정확해지므로,
-    /// 화면이 표시될 때마다(= 이 화면으로 올 때마다) 실제 크기를 다시 재서 패널 폭에 반영한다.
-    /// 생성 시점에 미리 계산해 두면(=핸들이 없을 때) 한 달 격자가 깨져서 요일/날짜 줄이 겹쳐 보인다.
+    /// 이력 달력의 크기에 맞춰 왼쪽 패널 폭과 아래 요약 영역을 배치한다.
     /// </summary>
     private void ApplyCalendarSizing()
     {
@@ -296,8 +298,7 @@ public partial class HistoryControl : UserControlBase
             };
             link.Click += (_, _) =>
             {
-                _calendar.SelectionStart = date;
-                _calendar.SelectionEnd = date;
+                _calendar.SelectedDate = date;
                 SelectDate(date);
             };
             _calendarRecentPanel.Controls.Add(link);
@@ -319,10 +320,11 @@ public partial class HistoryControl : UserControlBase
             .Union(m_oAllLogEntries.Select(entry => entry.Timestamp.Date))
             .Distinct()
             .ToArray();
-        _calendar.BoldedDates = datesWithHistory;
-        _calendar.UpdateBoldedDates();
+        // [Codex - 2026.09.21] 백업과 로그가 있는 날짜를 같은 이력 표식으로 표시한다.
+        _calendar.SetHistoryDates(datesWithHistory);
 
-        SelectDate(_calendar.SelectionStart);
+        SelectDate(_calendar.SelectedDate);
+        UpdateCalendarSidebar(_calendar.DisplayedMonth);
     }
 
     /// <summary>
@@ -529,7 +531,7 @@ public partial class HistoryControl : UserControlBase
         if (m_bIsLogView)
         {
             ConfigureLogColumns();
-            ShowLogEntries(_calendar.SelectionStart);
+            ShowLogEntries(_calendar.SelectedDate);
             _logViewButton.Text = "비교 결과 보기";
         }
         else
