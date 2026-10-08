@@ -21,7 +21,8 @@ partial class BackupControl
     private RadioButton fullZipRadioButton = null!, selectiveRadioButton = null!;
     private PC_BackUp.StyledButton backupButton = null!;
     private PC_BackUp.StyledButton cancelButton = null!;
-    private ProgressBar progressBar = null!;
+    private PC_BackUp.LinearProgressBar progressBar = null!;
+    private Panel progressGap = null!;
 
     protected override void Dispose(bool disposing) { if (disposing) components?.Dispose(); base.Dispose(disposing); }
 
@@ -32,7 +33,8 @@ partial class BackupControl
         statusLabel = new Label();
         cancelButton = new StyledButton();
         backupButton = new StyledButton();
-        progressBar = new ProgressBar();
+        progressGap = new Panel();
+        progressBar = new LinearProgressBar();
         optionCard = new CardPanel();
         selectiveRadioButton = new RadioButton();
         fullZipRadioButton = new RadioButton();
@@ -75,11 +77,13 @@ partial class BackupControl
         action.Controls.Add(statusLabel);
         action.Controls.Add(cancelButton);
         action.Controls.Add(backupButton);
+        // [Claude - 2026.10.08] 도킹은 Controls 뒤쪽부터 처리된다: progressBar(맨 위) → progressGap(여백) → 버튼 순.
+        action.Controls.Add(progressGap);
         action.Controls.Add(progressBar);
         action.Location = new Point(20, 399);
         action.Name = "action";
-        action.Padding = new Padding(0, 12, 0, 0);
-        action.Size = new Size(960, 71);
+        action.Padding = new Padding(0, 4, 0, 0);
+        action.Size = new Size(960, 89);
         action.TabIndex = 0;
         // 
         // statusLabel
@@ -126,10 +130,18 @@ partial class BackupControl
         // progressBar
         // 
         progressBar.Dock = DockStyle.Top;
-        progressBar.Location = new Point(0, 12);
+        progressBar.Location = new Point(0, 4);
         progressBar.Name = "progressBar";
-        progressBar.Size = new Size(960, 8);
+        progressBar.Size = new Size(960, 22);
         progressBar.TabIndex = 3;
+        //
+        // progressGap
+        //
+        progressGap.Dock = DockStyle.Top;
+        progressGap.Location = new Point(0, 26);
+        progressGap.Name = "progressGap";
+        progressGap.Size = new Size(960, 14);
+        progressGap.TabIndex = 4;
         // 
         // optionCard
         // 
