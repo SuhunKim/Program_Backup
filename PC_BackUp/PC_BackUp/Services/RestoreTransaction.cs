@@ -22,7 +22,7 @@ internal static class RestoreTransaction
         public bool Started { get; set; }
     }
 
-    public static void Apply(IReadOnlyDictionary<string, string> sources, string destinationRoot, IProgress<int>? progress, CancellationToken token)
+    public static void Apply(IReadOnlyDictionary<string, string> sources, string destinationRoot, IProgress<int>? progress, CancellationToken token, Action? beforeApply = null)
     {
         RecoverForRoot(destinationRoot);
         var work = Path.Combine(JournalRoot, Guid.NewGuid().ToString("N"));
@@ -42,6 +42,7 @@ internal static class RestoreTransaction
                 if (existed) File.Copy(target, Path.Combine(work, string.Format("old-{0}", index)));
                 journal.Entries.Add(new Entry { RelativePath = pair.Key, Existed = existed });
             }
+            beforeApply?.Invoke();
             Save(work, journal);
             for (var index = 0; index < journal.Entries.Count; index++)
             {

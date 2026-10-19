@@ -50,7 +50,7 @@ public partial class MainForm : Form
         m_oMenuManager.Register(MainMenuId.Backup, new BackupControl(settingsService, backupService, loggingService));
         m_oMenuManager.Register(MainMenuId.Recovery, recoveryControl);
         m_oMenuManager.Register(MainMenuId.History,
-            new HistoryControl(settingsService, catalogService, xmlComparisonService, loggingService));
+            new HistoryControl(settingsService, catalogService, xmlComparisonService, loggingService, recoveryService, backupService));
         m_oMenuManager.Register(MainMenuId.Settings, new SettingControl(settingsService, loggingService));
 
         m_oMenuManager.Select(MainMenuId.Dashboard);

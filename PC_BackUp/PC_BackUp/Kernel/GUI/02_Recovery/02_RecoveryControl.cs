@@ -329,9 +329,6 @@ public partial class RecoveryControl : UserControlBase
 		if (confirm != DialogResult.Yes)
 			return;
 
-		if (!await EnsureTargetProcessesStoppedAsync(settings))
-			return;
-
 		await RunRestoreAsync(record, settings);
 	}
 
@@ -478,8 +475,10 @@ public partial class RecoveryControl : UserControlBase
 		m_oCancellationTokenSource = new CancellationTokenSource();
 		try
 		{
-			if (_autoSafetyBackupCheckBox.Checked && m_oBackupService is not null &&
-				!await RunAutoSafetyBackupAsync(settings))
+            var safetySettings = settings.Snapshot();
+            safetySettings.AutoBackupBeforeRestore = _autoSafetyBackupCheckBox.Checked;
+            if (m_oBackupService is null || !await RestoreSafetyPrompt.PrepareAsync(this, safetySettings,
+                m_oRecoveryService, m_oBackupService, null, m_oCancellationTokenSource.Token))
 			{
 				return;
 			}
