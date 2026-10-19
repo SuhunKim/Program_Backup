@@ -12,6 +12,7 @@ public partial class HistoryControl : UserControlBase
     private bool m_bIsBusy;
     private bool m_bIsLogView;
     private int m_iCatalogVersion;
+    private Dictionary<XmlDifference, IReadOnlyList<TextDiff.Segment>> m_oDiffSegments = new();
     private bool m_bSynchronizingSelection;
     private AppSettings? m_oComparedSettings;
     private RecoveryService? m_oRecoveryService;
@@ -256,15 +257,17 @@ public partial class HistoryControl : UserControlBase
 
         e.PaintBackground(e.CellBounds, true);
 
-        var segments = TextDiff.Compute(item.CurrentValue, item.BackupValue)
-            .Where(segment => segment.Kind == TextDiff.SegmentKind.Equal ||
+        // [Codex - 2026.10.19] 그리기에서는 이미 계산된 구간만 조회한다.
+        if (!m_oDiffSegments.TryGetValue(item, out var cached)) return;
+        var segments = cached.Where(segment => segment.Kind == TextDiff.SegmentKind.Equal ||
                                (isCurrentColumn && segment.Kind == TextDiff.SegmentKind.RemovedFromLeft) ||
                                (isBackupColumn && segment.Kind == TextDiff.SegmentKind.AddedInRight));
 
         var x = e.CellBounds.Left + 4;
         foreach (var segment in segments)
         {
-            var size = TextRenderer.MeasureText(e.Graphics, segment.Text, e.CellStyle.Font, e.CellBounds.Size, TextFormatFlags.NoPadding);
+            var displayText = segment.Text.Length > 2048 ? string.Format("{0}…", segment.Text[..2048]) : segment.Text;
+            var size = TextRenderer.MeasureText(e.Graphics, displayText, e.CellStyle.Font, e.CellBounds.Size, TextFormatFlags.NoPadding);
             var segmentBounds = new Rectangle(x, e.CellBounds.Top, size.Width, e.CellBounds.Height);
             if (segment.Kind != TextDiff.SegmentKind.Equal)
             {
@@ -280,7 +283,7 @@ public partial class HistoryControl : UserControlBase
                 TextDiff.SegmentKind.AddedInRight => ColorRGB.DiffAddedText,
                 _ => e.CellStyle.ForeColor
             };
-            TextRenderer.DrawText(e.Graphics, segment.Text, e.CellStyle.Font, segmentBounds, textColor,
+            TextRenderer.DrawText(e.Graphics, displayText, e.CellStyle.Font, segmentBounds, textColor,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             x += size.Width;
         }
@@ -447,6 +450,8 @@ public partial class HistoryControl : UserControlBase
             // _grid(빨강/노랑 강조), "존재 차이"(파일이 한쪽에만 있음)는 _existenceGrid(경로만).
             var valueChanges = differences.Where(item => item.Kind == XmlDifferenceKind.ValueChanged).ToList();
             var existenceDiffs = differences.Where(item => item.Kind != XmlDifferenceKind.ValueChanged).ToList();
+            m_oDiffSegments = await Task.Run(() => valueChanges.ToDictionary(item => item,
+                item => TextDiff.Compute(item.CurrentValue, item.BackupValue)), m_oCancellationTokenSource.Token);
             _grid.DataSource = valueChanges;
             _existenceGrid.DataSource = existenceDiffs;
             _existenceHost.Visible = existenceDiffs.Count > 0;
@@ -514,6 +519,7 @@ public partial class HistoryControl : UserControlBase
     private void InvalidateComparison()
     {
         m_oComparedSettings = null;
+        m_oDiffSegments.Clear();
         _applyButton.Enabled = false;
     }
 
