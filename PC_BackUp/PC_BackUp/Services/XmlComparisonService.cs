@@ -124,7 +124,8 @@ public sealed class XmlComparisonService
     {
         try
         {
-            var items = selected.ToList();
+            var items = selected.Where(item => item.Kind != XmlDifferenceKind.ExistsOnlyInCurrent)
+                .DistinctBy(item => item.RelativeFilePath, StringComparer.OrdinalIgnoreCase).ToList();
             if (items.Count == 0)
                 return OperationResult.Failure("적용할 항목을 선택하세요.");
 
@@ -142,7 +143,7 @@ public sealed class XmlComparisonService
                     EnsureChildPath(filePath, currentRoot);
                     if (!backupDocuments.TryGetValue(group.Key, out var backupXml))
                     {
-                        skipped += group.Count();
+                        skipped++;
                         progress?.Report((index + 1) * 100 / Math.Max(1, groups.Count));
                         continue;
                     }
