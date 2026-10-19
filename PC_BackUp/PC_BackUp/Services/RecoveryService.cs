@@ -112,7 +112,7 @@ public sealed class RecoveryService
         }
         catch (OperationCanceledException)
         {
-            return OperationResult.Failure("복원이 취소되었습니다.");
+            return OperationResult.Canceled("복원이 취소되었습니다.");
         }
         catch (Exception exception)
         {

@@ -43,10 +43,10 @@ public sealed class BackupService
                 if (kind == BackupKind.SelectiveFolders)
                     EnsureSelectiveFoldersExist(sourceRoot, selectiveFolderNames);
 
-                var files = EnumerateSourceFiles(sourceRoot, backupRoot)
-                    .Where(file => kind == BackupKind.FullZip ||
-                                   IsConfiguredFolderItem(sourceRoot, file, selectiveFolderNames))
-                    .ToList();
+                var roots = kind == BackupKind.FullZip
+                    ? new[] { sourceRoot }
+                    : selectiveFolderNames.Select(name => Path.Combine(sourceRoot, name));
+                var files = roots.SelectMany(root => EnumerateSourceFiles(root, backupRoot)).ToList();
 
                 if (files.Count == 0)
                     throw new InvalidOperationException("백업 조건에 맞는 파일이 없습니다.");
@@ -82,7 +82,7 @@ public sealed class BackupService
         }
         catch (OperationCanceledException)
         {
-            return (OperationResult.Failure("백업이 취소되었습니다."), null);
+            return (OperationResult.Canceled("백업이 취소되었습니다."), null);
         }
         catch (Exception exception)
         {
@@ -132,20 +132,37 @@ public sealed class BackupService
         throw new InvalidOperationException("사용 가능한 백업 파일명을 찾지 못했습니다. 백업 폴더를 정리한 뒤 다시 시도하세요.");
     }
 
+    // [Codex - 2026.10.19] 접근 실패는 경로를 포함해 드러내고 저장소·링크는 내려가기 전에 제외한다.
     private static IEnumerable<string> EnumerateSourceFiles(string sourceRoot, string backupRoot)
     {
-        var options = new EnumerationOptions
+        if ((File.GetAttributes(sourceRoot) & FileAttributes.ReparsePoint) != 0)
+            throw new IOException(string.Format("백업 원본이 연결 경로입니다: {0}", sourceRoot));
+        var pending = new Stack<string>();
+        pending.Push(sourceRoot);
+        while (pending.Count > 0)
         {
-            RecurseSubdirectories = true,
-            IgnoreInaccessible = true,
-            AttributesToSkip = FileAttributes.ReparsePoint
-        };
-
-        foreach (var file in Directory.EnumerateFiles(sourceRoot, "*", options))
-        {
-            var fullPath = Path.GetFullPath(file);
-            if (!IsSameOrChildPath(fullPath, backupRoot))
-                yield return fullPath;
+            var directory = pending.Pop();
+            string[] entries;
+            try { entries = Directory.GetFileSystemEntries(directory); }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                throw new IOException(string.Format("백업 항목을 읽지 못했습니다: {0}", directory), exception);
+            }
+            foreach (var entry in entries)
+            {
+                var fullPath = Path.GetFullPath(entry);
+                if (IsSameOrChildPath(fullPath, backupRoot)) continue;
+                FileAttributes attributes;
+                try { attributes = File.GetAttributes(fullPath); }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    throw new IOException(string.Format("백업 항목을 확인하지 못했습니다: {0}", fullPath), exception);
+                }
+                if ((attributes & FileAttributes.ReparsePoint) != 0)
+                    throw new IOException(string.Format("연결 경로는 완전 백업을 보장할 수 없습니다: {0}", fullPath));
+                if ((attributes & FileAttributes.Directory) != 0) pending.Push(fullPath);
+                else yield return fullPath;
+            }
         }
     }
 
