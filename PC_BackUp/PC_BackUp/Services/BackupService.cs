@@ -20,6 +20,7 @@ public sealed class BackupService
         IProgress<int>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        settings = settings.Snapshot();
         var errors = settings.Validate();
         if (errors.Count > 0)
             return (OperationResult.Failure(string.Join(Environment.NewLine, errors)), null);
@@ -28,6 +29,7 @@ public sealed class BackupService
 
         try
         {
+            using var operation = OperationCoordinator.Acquire(settings.GetSourceRoot(), settings.BackupRootPath);
             var record = await Task.Run(() =>
             {
                 var sourceRoot = Path.GetFullPath(settings.GetSourceRoot());
@@ -49,10 +51,27 @@ public sealed class BackupService
                 if (files.Count == 0)
                     throw new InvalidOperationException("백업 조건에 맞는 파일이 없습니다.");
 
-                if (kind == BackupKind.FullZip)
-                    CreateZip(sourceRoot, destination, files, progress, cancellationToken);
-                else
-                    CopyToFolder(sourceRoot, destination, files, progress, cancellationToken);
+                // [Codex - 2026.10.19] 완료되기 전에는 카탈로그에서 인식하지 않는 이름으로 작성한다.
+                var pending = Path.Combine(backupRoot, string.Format(".pcbackup-pending-{0}", Guid.NewGuid().ToString("N")));
+                try
+                {
+                    if (kind == BackupKind.FullZip)
+                        CreateZip(sourceRoot, pending, files, progress, cancellationToken);
+                    else
+                        CopyToFolder(sourceRoot, pending, files, progress, cancellationToken);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (kind == BackupKind.FullZip) File.Move(pending, destination);
+                    else Directory.Move(pending, destination);
+                }
+                finally
+                {
+                    try
+                    {
+                        if (File.Exists(pending)) File.Delete(pending);
+                        if (Directory.Exists(pending)) Directory.Delete(pending, true);
+                    }
+                    catch { /* 완료본은 보존하고 미완성 잔여물은 카탈로그에서 제외한다. */ }
+                }
 
                 m_oCatalogService.Refresh(backupRoot);
                 return m_oCatalogService.GetAll().First(record =>
