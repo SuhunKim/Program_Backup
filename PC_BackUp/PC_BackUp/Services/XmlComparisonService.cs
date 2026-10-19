@@ -165,7 +165,7 @@ public sealed class XmlComparisonService
         }
         catch (OperationCanceledException)
         {
-            return OperationResult.Failure("적용이 취소되었습니다.");
+            return OperationResult.Canceled("적용이 취소되었습니다.");
         }
         catch (Exception exception)
         {
