@@ -11,6 +11,7 @@ internal static class ZipExtraction
         CancellationToken token = default, IProgress<int>? progress = null)
     {
         var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(destinationRoot));
+        PathSafety.EnsureNoReparsePoints(root);
         using var archive = ZipFile.OpenRead(zipPath);
         if (archive.Entries.Count > MaximumEntries) throw new InvalidDataException("ZIP 항목 수 제한(100,000개)을 초과했습니다.");
         var targets = new List<(ZipArchiveEntry Entry, string Path)>();
@@ -38,7 +39,9 @@ internal static class ZipExtraction
             token.ThrowIfCancellationRequested();
             if (item.Entry.FullName.EndsWith('/') || item.Entry.FullName.EndsWith('\\'))
             { Directory.CreateDirectory(item.Path); continue; }
+            PathSafety.EnsureNoReparsePoints(item.Path);
             Directory.CreateDirectory(Path.GetDirectoryName(item.Path)!);
+            PathSafety.EnsureNoReparsePoints(item.Path);
             using var input = item.Entry.Open();
             using var output = new FileStream(item.Path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
             var length = FileTransfer.Copy(input, output, token, count =>

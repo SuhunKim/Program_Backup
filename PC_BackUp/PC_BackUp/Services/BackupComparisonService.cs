@@ -97,7 +97,7 @@ public sealed class BackupComparisonService
     {
         if (Directory.Exists(record.FullPath))
         {
-            var files = Directory.EnumerateFiles(record.FullPath, "*", SearchOption.AllDirectories)
+            var files = PathSafety.EnumerateFiles(record.FullPath)
                 .ToDictionary(file => Path.GetRelativePath(record.FullPath, file), StringComparer.OrdinalIgnoreCase);
             return (files, string.Empty);
         }
