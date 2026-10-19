@@ -47,14 +47,15 @@ public partial class _00_Dashboard : UserControlBase
             if (IsDisposed || Disposing || version != m_iCatalogVersion) return;
             var records = catalog.Values.SelectMany(value => value).OrderByDescending(record => record.CreatedAt).ToList();
             var latest = records.FirstOrDefault();
-            var errors = settings.Validate();
+            var errors = settings.Validate().ToList();
+            if (!string.IsNullOrEmpty(LogManager.LastWriteError)) errors.Add(string.Format("로그 기록 확인 필요: {0}", LogManager.LastWriteError));
             _summaryDateValue.Text = latest is null ? "백업 없음" : latest.CreatedAt.ToString("yyyy-MM-dd HH:mm");
             _summaryCountValue.Text = string.Format("{0:N0}건", records.Count);
             _summarySizeValue.Text = string.Format("{0}{1}", BackupRecord.FormatBytes(records.Sum(record => Math.Max(0, record.SizeBytes))), records.Any(record => record.SizeBytes < 0) ? " + 미확인" : string.Empty);
             m_oSelectedRecentRecord = null;
             m_oRecentGrid.DataSource = records.Take(5).ToList();
             m_oRecentGrid.ClearSelection();
-            _summaryStatusValue.Text = errors.Count == 0 ? "정상" : "확인 필요";
+            _summaryStatusValue.Text = errors.Count == 0 ? "설정 유효" : "확인 필요";
             m_oWarningCard.Visible = errors.Count > 0;
             m_oWarningLabel.Text = string.Join("  ·  ", errors);
         }

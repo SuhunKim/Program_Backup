@@ -17,7 +17,13 @@ namespace PC_BackUp
 				HandleUnhandledException(e.ExceptionObject as Exception ?? new Exception(e.ExceptionObject?.ToString()));
 
 			ApplicationConfiguration.Initialize();
-			Application.Run(new MainForm());
+            try { Application.Run(new MainForm()); }
+            catch (Exception exception)
+            {
+                try { new LogManager().LogError("초기화 실패", exception); } catch { }
+                MessageBox.Show(string.Format("프로그램을 시작하지 못했습니다.\n{0}\n\n설정·데이터 경로의 읽기/쓰기 권한을 확인하세요.", exception.Message),
+                    "시작 실패", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
 		}
 
 		private static void HandleUnhandledException(Exception exception)

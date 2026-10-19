@@ -568,13 +568,10 @@ public partial class HistoryControl : UserControlBase
         try
         {
             var progress = new Progress<int>(value => _progress.Value = value);
-            if (!await RestoreSafetyPrompt.PrepareAsync(this, settings, m_oRecoveryService, m_oBackupService, progress, m_oCancellationTokenSource.Token)) return;
-            var result = await m_oComparisonService.ApplySelectedAsync(settings, record, selected, progress, m_oCancellationTokenSource.Token);
+            var result = await RestoreSafetyPrompt.RunAsync(this, settings, m_oRecoveryService, m_oBackupService, progress,
+                m_oCancellationTokenSource.Token, () => m_oComparisonService.ApplySelectedAsync(settings, record, selected, progress, m_oCancellationTokenSource.Token));
             InvalidateComparison();
-            if (result.Succeeded)
-                m_oLoggingService?.LogInfo(string.Format("설정 적용: {0}", result.Message));
-            else
-                m_oLoggingService?.LogError(string.Format("설정 적용 실패: {0}", result.Message));
+            m_oLoggingService?.LogResult("XmlRestore", result);
             MessageBox.Show(this, result.Message, result.Succeeded ? "설정 적용" : "적용 실패", MessageBoxButtons.OK,
                 result.Succeeded ? MessageBoxIcon.Information : MessageBoxIcon.Error);
             SetSummaryStatus(result.Message.Replace(Environment.NewLine, "  "), isSuccess: result.Succeeded);
@@ -601,6 +598,20 @@ public partial class HistoryControl : UserControlBase
         var next = !items.All(item => item.Apply);
         foreach (var item in items) item.Apply = next && item.Kind != XmlDifferenceKind.ExistsOnlyInCurrent;
         _grid.Refresh();
+    }
+
+    // [Codex - 2026.10.19] 사용자가 선택한 위치에 작업 로그와 실행 환경을 내보낸다.
+    private void UiClick_ExportDiagnostics(object? sender, EventArgs e)
+    {
+        if (m_oLoggingService is null || m_bIsBusy) return;
+        using var dialog = new SaveFileDialog { Filter = "진단 ZIP (*.zip)|*.zip", FileName = string.Format("PC_BackUp_Diagnostics_{0:yyyyMMdd-HHmmss}.zip", DateTime.Now), OverwritePrompt = false };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            m_oLoggingService.ExportDiagnostics(dialog.FileName);
+            MessageBox.Show(this, "진단 파일을 저장했습니다.", "진단 내보내기");
+        }
+        catch (Exception exception) { MessageBox.Show(this, exception.Message, "진단 저장 실패"); }
     }
 
     private void ToggleLogView()
