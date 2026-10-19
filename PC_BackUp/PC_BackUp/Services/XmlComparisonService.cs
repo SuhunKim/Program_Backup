@@ -78,8 +78,17 @@ public sealed class XmlComparisonService
                 // 양쪽 다 파일이 있으면 실제로 어느 설정 항목(XmlPath)이 어떤 값에서 어떤 값으로
                 // 다른지 필드 단위로 전부 나열한다 — 예전에는 "파일 전체가 다름" 한 줄만 만들고
                 // 실제 값은 버렸는데, 그러면 그리드에서 뭐가 다른지 전혀 알 수 없었다.
-                var sourceValues = FlattenXml(sourceXml, cancellationToken);
-                var destinationValues = FlattenXml(destinationXml, cancellationToken);
+                Dictionary<string, string> sourceValues;
+                Dictionary<string, string> destinationValues;
+                try
+                {
+                    sourceValues = FlattenXml(sourceXml, cancellationToken);
+                    destinationValues = FlattenXml(destinationXml, cancellationToken);
+                }
+                catch (Exception exception) when (exception is XmlException or InvalidDataException)
+                {
+                    throw new InvalidDataException(string.Format("XML 비교 불가: {0}\n{1}", relativePath, exception.Message), exception);
+                }
                 foreach (var xmlPath in sourceValues.Keys.Union(destinationValues.Keys, StringComparer.Ordinal))
                 {
                     var hasSourceValue = sourceValues.TryGetValue(xmlPath, out var sourceValue);
@@ -188,7 +197,7 @@ public sealed class XmlComparisonService
         var options = new EnumerationOptions
         {
             RecurseSubdirectories = true,
-            IgnoreInaccessible = true,
+            IgnoreInaccessible = false,
             AttributesToSkip = FileAttributes.ReparsePoint
         };
 
@@ -250,7 +259,7 @@ public sealed class XmlComparisonService
     {
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
         if (string.IsNullOrWhiteSpace(xml))
-            return values;
+            throw new InvalidDataException("XML 문서가 비어 있습니다.");
 
         try
         {
@@ -260,7 +269,8 @@ public sealed class XmlComparisonService
         }
         catch (XmlException)
         {
-            // 손상된 XML은 비교 목록에서 제외하고 서비스 호출 자체는 계속 진행한다.
+            // [Codex - 2026.10.19] 손상은 동일함이 아니므로 파일 수준 비교 실패를 호출자에 전달한다.
+            throw;
         }
         return values;
     }
@@ -286,13 +296,15 @@ public sealed class XmlComparisonService
     /// 큰 XML을 처리하는 도중에도 취소가 바로 먹히게 한다.
     /// </summary>
     private static void VisitElement(XmlElement element, int sameNameIndex, string parentPath,
-        IDictionary<string, string> values, CancellationToken cancellationToken)
+        IDictionary<string, string> values, CancellationToken cancellationToken, int depth = 0)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var path = string.Format("{0}/*[local-name()='{1}'][{2}]", parentPath, element.LocalName, sameNameIndex);
+        // [Codex - 2026.10.19] namespace URI를 포함하여 동명 노드·속성의 충돌을 막는다.
+        if (depth > 256) throw new InvalidDataException("XML 중첩 깊이 제한을 초과했습니다.");
+        var path = string.Format("{0}/{{{1}}}{2}[{3}]", parentPath, element.NamespaceURI, element.LocalName, sameNameIndex);
         foreach (XmlAttribute attribute in element.Attributes)
-            values[string.Format("{0}/@*[local-name()='{1}']", path, attribute.LocalName)] = attribute.Value;
+            values[string.Format("{0}/@{{{1}}}{2}", path, attribute.NamespaceURI, attribute.LocalName)] = attribute.Value;
 
         var childElements = element.ChildNodes.OfType<XmlElement>().ToList();
         if (childElements.Count == 0)
@@ -301,20 +313,28 @@ public sealed class XmlComparisonService
             return;
         }
 
+        var directText = string.Concat(element.ChildNodes.OfType<XmlNode>()
+            .Where(node => node is XmlText or XmlCDataSection).Select(node => node.Value));
+        if (!string.IsNullOrWhiteSpace(directText)) values[string.Format("{0}/text()", path)] = directText;
         var nameCounts = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var child in childElements)
         {
-            nameCounts.TryGetValue(child.LocalName, out var count);
+            var name = string.Format("{{{0}}}{1}", child.NamespaceURI, child.LocalName);
+            nameCounts.TryGetValue(name, out var count);
             count++;
-            nameCounts[child.LocalName] = count;
-            VisitElement(child, count, path, values, cancellationToken);
+            nameCounts[name] = count;
+            VisitElement(child, count, path, values, cancellationToken, depth + 1);
         }
     }
 
     private static XmlDocument LoadXml(string xml)
     {
+        var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null,
+            MaxCharactersInDocument = 8 * 1024 * 1024 };
+        using var input = new StringReader(xml);
+        using var reader = XmlReader.Create(input, settings);
         var document = new XmlDocument { XmlResolver = null };
-        document.LoadXml(xml);
+        document.Load(reader);
         return document;
     }
 
