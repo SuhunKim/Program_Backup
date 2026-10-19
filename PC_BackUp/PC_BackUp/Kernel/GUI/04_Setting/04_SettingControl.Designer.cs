@@ -17,6 +17,8 @@ partial class SettingControl
     private Label projectFieldLabel = null!, executableFieldLabel = null!, backupPathFieldLabel = null!;
     private StyledButton executableBrowseButton = null!;
     private StyledButton backupBrowseButton = null!;
+    private Label sourceRootLabel = null!;
+    private StyledButton sourceRootBrowseButton = null!;
     private Panel divider = null!;
     private Panel folderSection = null!;
     private Panel folderTitleBar = null!;
@@ -83,7 +85,7 @@ partial class SettingControl
         card.Location = new Point(0, 0);
         card.Name = "card";
         card.Padding = new Padding(28, 20, 28, 20);
-        card.Size = new Size(960, 477);
+        card.Size = new Size(960, 549);
         card.TabIndex = 0;
         // 
         // divider
@@ -196,11 +198,21 @@ partial class SettingControl
         table.Dock = DockStyle.Top;
         table.Location = new Point(28, 20);
         table.Name = "table";
-        table.RowCount = 3;
+        // [Codex - 2026.10.19] 원본 루트는 선택 폴더 목록과 독립된 설정 필드다.
+        sourceRootLabel = new Label { Text = "원본 루트", Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft, Font = projectFieldLabel.Font, ForeColor = ColorRGB.Text };
+        sourceRootBrowseButton = new StyledButton { Text = "찾기", Dock = DockStyle.Fill, ButtonType = StyledButtonType.Secondary };
+        sourceRootBrowseButton.Click += UiClick_SourceRoot;
+        ConfigureTextBox(m_oSourceRootText);
+        table.Controls.Add(sourceRootLabel, 0, 3);
+        table.Controls.Add(m_oSourceRootText, 1, 3);
+        table.Controls.Add(sourceRootBrowseButton, 2, 3);
+        table.RowCount = 4;
         table.RowStyles.Add(new RowStyle(SizeType.Absolute, 72F));
         table.RowStyles.Add(new RowStyle(SizeType.Absolute, 72F));
         table.RowStyles.Add(new RowStyle(SizeType.Absolute, 72F));
-        table.Size = new Size(904, 216);
+        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 72F));
+        table.Size = new Size(904, 288);
         table.TabIndex = 2;
         // 
         // projectFieldLabel
