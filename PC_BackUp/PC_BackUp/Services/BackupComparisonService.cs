@@ -55,8 +55,8 @@ public sealed class BackupComparisonService
                 {
                     results.Add(new BackupFileDifference { RelativePath = relativePath, Status = "백업에만 있음" });
                 }
-                else if (!FilesEqual(backupPath, currentPath, cancellationToken) &&
-                         !TextFilesEqualIgnoringWhitespace(backupPath, currentPath, cancellationToken))
+                // [Codex - 2026.10.16] 복원 판단은 공백을 포함한 원본 바이트의 정확한 일치를 기준으로 한다.
+                else if (!FilesEqual(backupPath, currentPath, cancellationToken))
                 {
                     results.Add(new BackupFileDifference { RelativePath = relativePath, Status = "내용 변경" });
                 }
@@ -127,31 +127,4 @@ public sealed class BackupComparisonService
         }
     }
 
-    private static bool TextFilesEqualIgnoringWhitespace(string leftPath, string rightPath, CancellationToken cancellationToken)
-    {
-        var extension = Path.GetExtension(leftPath);
-        if (extension is not ".txt" and not ".xml" and not ".json" and not ".config" and not ".ini" and not ".cs" and not ".csproj")
-            return false;
-
-        using var leftReader = new StreamReader(leftPath, detectEncodingFromByteOrderMarks: true);
-        using var rightReader = new StreamReader(rightPath, detectEncodingFromByteOrderMarks: true);
-        while (true)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var leftChar = ReadNextNonWhitespace(leftReader);
-            var rightChar = ReadNextNonWhitespace(rightReader);
-            if (leftChar != rightChar)
-                return false;
-            if (leftChar < 0)
-                return true;
-        }
-    }
-
-    private static int ReadNextNonWhitespace(TextReader reader)
-    {
-        int character;
-        do { character = reader.Read(); }
-        while (character >= 0 && char.IsWhiteSpace((char)character));
-        return character;
-    }
 }
