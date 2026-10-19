@@ -67,6 +67,7 @@ internal static class RestoreTransaction
         }
         catch (Exception failure)
         {
+            journal.Committed = false;
             try { Rollback(work, journal); canClean = true; }
             catch (Exception rollbackFailure)
             {
