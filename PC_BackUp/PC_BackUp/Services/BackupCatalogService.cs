@@ -14,23 +14,35 @@ public sealed partial class BackupCatalogService
     // RecordsByDate)은 락 없이 항상 교체 전후 어느 한쪽의 완전한 딕셔너리만 보게 된다.
     // m_oRefreshLock은 Refresh() 호출 두 개가 겹칠 때 필드 교체 순서만 직렬화한다.
     private readonly object m_oRefreshLock = new();
+    private long m_lRefreshVersion;
     private volatile Dictionary<DateTime, List<BackupRecord>> m_oRecordsByDate = new();
 
     public IReadOnlyDictionary<DateTime, List<BackupRecord>> RecordsByDate => m_oRecordsByDate;
 
-    public IReadOnlyDictionary<DateTime, List<BackupRecord>> Refresh(string backupRootPath)
+    // [Codex - 2026.10.19] 요청 순서를 먼저 발급하여 오래 걸린 이전 탐색이 최신 캐시를 덮지 않게 한다.
+    public Task<IReadOnlyDictionary<DateTime, List<BackupRecord>>> RefreshAsync(string backupRootPath, CancellationToken token = default)
+    {
+        var version = Interlocked.Increment(ref m_lRefreshVersion);
+        return Task.Run(() => RefreshCore(backupRootPath, version, token), token);
+    }
+
+    public IReadOnlyDictionary<DateTime, List<BackupRecord>> Refresh(string backupRootPath) =>
+        RefreshCore(backupRootPath, Interlocked.Increment(ref m_lRefreshVersion), CancellationToken.None);
+
+    private IReadOnlyDictionary<DateTime, List<BackupRecord>> RefreshCore(string backupRootPath, long version, CancellationToken token)
     {
         var newRecordsByDate = new Dictionary<DateTime, List<BackupRecord>>();
 
         if (string.IsNullOrWhiteSpace(backupRootPath) || !Directory.Exists(backupRootPath))
         {
             lock (m_oRefreshLock)
-                m_oRecordsByDate = newRecordsByDate;
-            return RecordsByDate;
+                if (version == Volatile.Read(ref m_lRefreshVersion)) m_oRecordsByDate = newRecordsByDate;
+            return newRecordsByDate;
         }
 
         foreach (var path in Directory.EnumerateFileSystemEntries(backupRootPath, "*", SearchOption.TopDirectoryOnly))
         {
+            token.ThrowIfCancellationRequested();
             var name = Path.GetFileName(path);
             if (!TryParseBackupFileName(name, out var createdAt, out var kind))
                 continue;
@@ -43,7 +55,7 @@ public sealed partial class BackupCatalogService
                 Kind = kind,
                 FullPath = path,
                 FileName = name,
-                SizeBytes = File.Exists(path) ? new FileInfo(path).Length : metadata.Manifest?.Files.Sum(item => item.Length) ?? GetDirectorySize(path)
+                SizeBytes = File.Exists(path) ? new FileInfo(path).Length : metadata.Manifest?.Files.Sum(item => item.Length) ?? -1
             });
         }
 
@@ -51,8 +63,8 @@ public sealed partial class BackupCatalogService
             records.Sort((left, right) => right.CreatedAt.CompareTo(left.CreatedAt));
 
         lock (m_oRefreshLock)
-            m_oRecordsByDate = newRecordsByDate;
-        return RecordsByDate;
+            if (version == Volatile.Read(ref m_lRefreshVersion)) m_oRecordsByDate = newRecordsByDate;
+        return newRecordsByDate;
     }
 
     public IReadOnlyList<BackupRecord> GetByDate(DateTime date) =>

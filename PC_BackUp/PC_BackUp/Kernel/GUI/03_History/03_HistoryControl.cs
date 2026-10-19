@@ -11,6 +11,7 @@ public partial class HistoryControl : UserControlBase
     private LogManager? m_oLoggingService;
     private bool m_bIsBusy;
     private bool m_bIsLogView;
+    private int m_iCatalogVersion;
     private bool m_bSynchronizingSelection;
     private AppSettings? m_oComparedSettings;
     private RecoveryService? m_oRecoveryService;
@@ -345,12 +346,17 @@ public partial class HistoryControl : UserControlBase
         }
     }
 
-    private void RefreshBackupList()
+    private async void RefreshBackupList()
     {
+        var version = ++m_iCatalogVersion;
+        try
+        {
         if (m_oSettingsService is null || m_oCatalogService is null) return;
         ApplyCalendarSizing();
         var settings = m_oSettingsService.Load();
-        m_oAllRecords = m_oCatalogService.Refresh(settings.BackupRootPath).Values
+        var catalog = await m_oCatalogService.RefreshAsync(settings.BackupRootPath);
+        if (IsDisposed || Disposing || version != m_iCatalogVersion) return;
+        m_oAllRecords = catalog.Values
             .SelectMany(items => items)
             .OrderByDescending(item => item.CreatedAt)
             .ToList();
@@ -365,6 +371,9 @@ public partial class HistoryControl : UserControlBase
 
         SelectDate(_calendar.SelectedDate);
         UpdateCalendarSidebar(_calendar.DisplayedMonth);
+        }
+        catch (Exception exception)
+        { if (!IsDisposed && version == m_iCatalogVersion) SetSummaryStatus(string.Format("목록 조회 실패: {0}", exception.Message), false); }
     }
 
     /// <summary>
