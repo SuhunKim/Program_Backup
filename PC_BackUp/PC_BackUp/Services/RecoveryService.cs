@@ -103,7 +103,7 @@ public sealed class RecoveryService
                 {
                     // zip 파일(전체 백업 또는 압축된 선별 백업)이면 해제하고, 폴더면(구버전 선별 백업) 그대로 사용한다.
                     Directory.CreateDirectory(temporaryRoot);
-                    ZipExtraction.SafeExtractToDirectory(record.FullPath, temporaryRoot);
+                    ZipExtraction.SafeExtractToDirectory(record.FullPath, temporaryRoot, cancellationToken, new MappedProgress(progress, 0, 30));
                     restoreSource = temporaryRoot;
                 }
 
@@ -150,6 +150,6 @@ public sealed class RecoveryService
         // [Codex - 2026.10.19] 쓰기와 원상복구는 재시작 가능한 공통 트랜잭션이 담당한다.
         var sources = files.Where(file => !Path.GetRelativePath(sourceRoot, file).Equals(BackupManifestService.FileName, StringComparison.OrdinalIgnoreCase))
             .ToDictionary(file => Path.GetRelativePath(sourceRoot, file), file => file, StringComparer.OrdinalIgnoreCase);
-        RestoreTransaction.Apply(sources, destinationRoot, progress, cancellationToken);
+        RestoreTransaction.Apply(sources, destinationRoot, new MappedProgress(progress, 30, 70), cancellationToken);
     }
 }

@@ -37,13 +37,15 @@ internal static class RestoreTransaction
                 token.ThrowIfCancellationRequested();
                 var target = Target(journal.DestinationRoot, pair.Key);
                 var index = journal.Entries.Count;
-                File.Copy(pair.Value, Path.Combine(work, string.Format("new-{0}", index)));
+                FileTransfer.CopyFile(pair.Value, Path.Combine(work, string.Format("new-{0}", index)), token);
                 var existed = File.Exists(target);
-                if (existed) File.Copy(target, Path.Combine(work, string.Format("old-{0}", index)));
+                if (existed) FileTransfer.CopyFile(target, Path.Combine(work, string.Format("old-{0}", index)), token);
                 journal.Entries.Add(new Entry { RelativePath = pair.Key, Existed = existed });
             }
             beforeApply?.Invoke();
             Save(work, journal);
+            var totalBytes = sources.Values.Sum(file => new FileInfo(file).Length);
+            long appliedBytes = 0;
             for (var index = 0; index < journal.Entries.Count; index++)
             {
                 token.ThrowIfCancellationRequested();
@@ -55,12 +57,16 @@ internal static class RestoreTransaction
                 var pending = Pending(target, work);
                 try
                 {
-                    File.Copy(Path.Combine(work, string.Format("new-{0}", index)), pending, true);
+                    FileTransfer.CopyFile(Path.Combine(work, string.Format("new-{0}", index)), pending, token, count =>
+                    {
+                        appliedBytes += count;
+                        progress?.Report((int)Math.Min(99, appliedBytes * 100d / Math.Max(1, totalBytes)));
+                    });
                     token.ThrowIfCancellationRequested();
                     File.Move(pending, target, true);
                 }
                 finally { if (File.Exists(pending)) File.Delete(pending); }
-                progress?.Report((index + 1) * 100 / Math.Max(1, journal.Entries.Count));
+                progress?.Report(index == journal.Entries.Count - 1 ? 100 : (int)Math.Min(99, appliedBytes * 100d / Math.Max(1, totalBytes)));
             }
             journal.Committed = true;
             Save(work, journal);
@@ -123,7 +129,7 @@ internal static class RestoreTransaction
                 var pending = Pending(target, work);
                 if (entry.Existed)
                 {
-                    File.Copy(Path.Combine(work, string.Format("old-{0}", index)), pending, true);
+                    FileTransfer.CopyFile(Path.Combine(work, string.Format("old-{0}", index)), pending, CancellationToken.None);
                     File.Move(pending, target, true);
                 }
                 else if (File.Exists(target)) File.Delete(target);

@@ -65,7 +65,11 @@ public partial class BackupControl : UserControlBase
         m_oCancellationTokenSource = new CancellationTokenSource();
         try
         {
-            var progress = new Progress<int>(value => progressBar.Value = value);
+            var progress = new Progress<int>(value =>
+            {
+                progressBar.Value = value;
+                statusLabel.Text = value <= 5 ? "파일 검색·해시 계산 중..." : value <= 80 ? "파일 복사·압축 중..." : value < 100 ? "백업 검증·완료 처리 중..." : "백업 파일 처리가 완료되었습니다.";
+            });
             var result = await m_oBackupService.CreateAsync(settings, kind, suffix, progress, m_oCancellationTokenSource.Token);
             statusLabel.Text = result.Result.Message.Replace(Environment.NewLine, "  ");
             if (result.Result.Succeeded)
