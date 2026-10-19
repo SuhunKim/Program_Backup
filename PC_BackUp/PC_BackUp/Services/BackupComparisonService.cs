@@ -35,6 +35,8 @@ public sealed class BackupComparisonService
             var backupResult = ReadBackupFiles(record, cancellationToken);
             temporaryRoot = backupResult.TemporaryRoot;
             var backupFiles = backupResult.Files;
+            backupFiles.Remove(BackupManifestService.FileName);
+            var manifest = BackupManifestService.Read(record.FullPath);
             var backupRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(backupRootPath));
             var currentFiles = Directory.Exists(currentRoot)
                 ? Directory.EnumerateFiles(currentRoot, "*", CurrentRootEnumerationOptions)
@@ -43,6 +45,10 @@ public sealed class BackupComparisonService
                     .ToDictionary(file => Path.GetRelativePath(currentRoot, file), StringComparer.OrdinalIgnoreCase)
                 : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+            currentFiles.Remove(BackupManifestService.FileName);
+            if (manifest?.Kind == BackupKind.SelectiveFolders)
+                currentFiles = currentFiles.Where(item => SelectiveFolderMatch.IsInsideAnyFolder(item.Key, manifest.SelectedFolders))
+                    .ToDictionary(item => item.Key, item => item.Value, StringComparer.OrdinalIgnoreCase);
             var results = new List<BackupFileDifference>();
             var relativePaths = backupFiles.Keys.Union(currentFiles.Keys, StringComparer.OrdinalIgnoreCase).ToList();
             for (var index = 0; index < relativePaths.Count; index++)

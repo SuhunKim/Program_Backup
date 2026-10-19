@@ -51,6 +51,7 @@ public sealed class BackupService
                 if (files.Count == 0)
                     throw new InvalidOperationException("백업 조건에 맞는 파일이 없습니다.");
 
+                var manifest = BackupManifestService.Create(settings, kind, files, cancellationToken);
                 // [Codex - 2026.10.19] 완료되기 전에는 카탈로그에서 인식하지 않는 이름으로 작성한다.
                 var pending = Path.Combine(backupRoot, string.Format(".pcbackup-pending-{0}", Guid.NewGuid().ToString("N")));
                 try
@@ -59,6 +60,8 @@ public sealed class BackupService
                         CreateZip(sourceRoot, pending, files, progress, cancellationToken);
                     else
                         CopyToFolder(sourceRoot, pending, files, progress, cancellationToken);
+                    BackupManifestService.Write(pending, kind, manifest);
+                    BackupManifestService.Verify(pending, manifest, cancellationToken);
                     cancellationToken.ThrowIfCancellationRequested();
                     if (kind == BackupKind.FullZip) File.Move(pending, destination);
                     else Directory.Move(pending, destination);
@@ -73,9 +76,10 @@ public sealed class BackupService
                     catch { /* 완료본은 보존하고 미완성 잔여물은 카탈로그에서 제외한다. */ }
                 }
 
-                m_oCatalogService.Refresh(backupRoot);
-                return m_oCatalogService.GetAll().First(record =>
-                    string.Equals(record.FullPath, destination, StringComparison.OrdinalIgnoreCase));
+                // [Codex - 2026.10.19] 생성 성공을 별도 카탈로그 재탐색의 성공 여부와 분리한다.
+                return new BackupRecord { FullPath = destination, FileName = Path.GetFileName(destination),
+                    Kind = kind, CreatedAt = manifest.CreatedUtc.ToLocalTime(), Manifest = manifest,
+                    SizeBytes = kind == BackupKind.FullZip ? new FileInfo(destination).Length : manifest.Files.Sum(item => item.Length) };
             }, cancellationToken);
 
             return (OperationResult.Success(string.Format("백업이 완료되었습니다.\n{0}", record.FileName)), record);

@@ -97,6 +97,7 @@ public sealed class RecoveryService
             using var operation = OperationCoordinator.Acquire(settings.GetSourceRoot(), settings.BackupRootPath);
             return await Task.Run(() =>
             {
+                BackupManifestService.ValidateForRestore(record, settings, cancellationToken);
                 var restoreSource = record.FullPath;
                 if (File.Exists(record.FullPath))
                 {
@@ -150,6 +151,7 @@ public sealed class RecoveryService
         {
             cancellationToken.ThrowIfCancellationRequested();
             var relativePath = Path.GetRelativePath(sourceRoot, files[index]);
+            if (relativePath.Equals(BackupManifestService.FileName, StringComparison.OrdinalIgnoreCase)) continue;
             var targetPath = Path.GetFullPath(Path.Combine(destinationRoot, relativePath));
             EnsureChildPath(targetPath, destinationRoot);
             Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
