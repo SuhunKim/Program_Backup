@@ -28,6 +28,7 @@ public partial class MainForm : Form
 
     private void Initialize()
     {
+        RestoreTransaction.RecoverPending();
         var settingsService = new XmlSettingsService();
         var catalogService = new BackupCatalogService();
         var backupService = new BackupService(catalogService);
