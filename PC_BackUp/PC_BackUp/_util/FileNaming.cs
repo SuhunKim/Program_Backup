@@ -6,6 +6,10 @@ namespace PC_BackUp;
 /// </summary>
 internal static class FileNaming
 {
+    // [Codex - 2026.10.19] 선택 폴더는 원본 아래의 정규 상대 경로만 허용한다.
+    public static bool IsValidRelativeFolder(string path) => !string.IsNullOrWhiteSpace(path) &&
+        !Path.IsPathRooted(path) && path.Split(new[] { '/', '\\' }).All(IsValidFolderName);
+
     public static bool IsValidFolderName(string name)
     {
         if (string.IsNullOrWhiteSpace(name) || name is "." or "..")

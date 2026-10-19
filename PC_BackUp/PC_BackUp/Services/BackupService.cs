@@ -46,7 +46,7 @@ public sealed class BackupService
                 var roots = kind == BackupKind.FullZip
                     ? new[] { sourceRoot }
                     : selectiveFolderNames.Select(name => Path.Combine(sourceRoot, name));
-                var files = roots.SelectMany(root => EnumerateSourceFiles(root, backupRoot)).ToList();
+                var files = roots.SelectMany(root => EnumerateSourceFiles(root, backupRoot)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
                 if (files.Count == 0)
                     throw new InvalidOperationException("백업 조건에 맞는 파일이 없습니다.");
