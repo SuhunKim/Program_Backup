@@ -51,7 +51,9 @@ public sealed class BackupService
                 if (files.Count == 0)
                     throw new InvalidOperationException("백업 조건에 맞는 파일이 없습니다.");
 
+                progress?.Report(0);
                 var manifest = BackupManifestService.Create(settings, kind, files, cancellationToken);
+                progress?.Report(5);
                 // [Codex - 2026.10.19] 완료되기 전에는 카탈로그에서 인식하지 않는 이름으로 작성한다.
                 var pending = Path.Combine(backupRoot, string.Format(".pcbackup-pending-{0}", Guid.NewGuid().ToString("N")));
                 try
@@ -60,11 +62,13 @@ public sealed class BackupService
                         CreateZip(sourceRoot, pending, files, progress, cancellationToken);
                     else
                         CopyToFolder(sourceRoot, pending, files, progress, cancellationToken);
+                    progress?.Report(85);
                     BackupManifestService.Write(pending, kind, manifest);
                     BackupManifestService.Verify(pending, manifest, cancellationToken);
                     cancellationToken.ThrowIfCancellationRequested();
                     if (kind == BackupKind.FullZip) File.Move(pending, destination);
                     else Directory.Move(pending, destination);
+                    progress?.Report(100);
                 }
                 finally
                 {
@@ -199,6 +203,8 @@ public sealed class BackupService
     {
         using var stream = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create);
+        var totalBytes = files.Sum(file => new FileInfo(file).Length);
+        long processed = 0;
 
         try
         {
@@ -206,8 +212,13 @@ public sealed class BackupService
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var relativePath = Path.GetRelativePath(sourceRoot, files[index]);
-                archive.CreateEntryFromFile(files[index], relativePath, CompressionLevel.Optimal);
-                progress?.Report((index + 1) * 100 / files.Count);
+                using var input = File.OpenRead(files[index]);
+                using var output = archive.CreateEntry(relativePath, CompressionLevel.Optimal).Open();
+                FileTransfer.Copy(input, output, cancellationToken, count =>
+                {
+                    processed += count;
+                    progress?.Report(5 + (int)Math.Min(75, processed * 75d / Math.Max(1, totalBytes)));
+                });
             }
         }
         catch
@@ -227,6 +238,8 @@ public sealed class BackupService
         CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(destination);
+        var totalBytes = files.Sum(file => new FileInfo(file).Length);
+        long processed = 0;
         try
         {
             for (var index = 0; index < files.Count; index++)
@@ -235,8 +248,11 @@ public sealed class BackupService
                 var relativePath = Path.GetRelativePath(sourceRoot, files[index]);
                 var targetPath = Path.Combine(destination, relativePath);
                 Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
-                File.Copy(files[index], targetPath, true);
-                progress?.Report((index + 1) * 100 / files.Count);
+                FileTransfer.CopyFile(files[index], targetPath, cancellationToken, count =>
+                {
+                    processed += count;
+                    progress?.Report(5 + (int)Math.Min(75, processed * 75d / Math.Max(1, totalBytes)));
+                });
             }
         }
         catch

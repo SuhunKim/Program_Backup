@@ -451,7 +451,8 @@ public partial class HistoryControl : UserControlBase
             var valueChanges = differences.Where(item => item.Kind == XmlDifferenceKind.ValueChanged).ToList();
             var existenceDiffs = differences.Where(item => item.Kind != XmlDifferenceKind.ValueChanged).ToList();
             m_oDiffSegments = await Task.Run(() => valueChanges.ToDictionary(item => item,
-                item => TextDiff.Compute(item.CurrentValue, item.BackupValue)), m_oCancellationTokenSource.Token);
+                item => { m_oCancellationTokenSource.Token.ThrowIfCancellationRequested();
+                    return TextDiff.Compute(item.CurrentValue, item.BackupValue); }), m_oCancellationTokenSource.Token);
             _grid.DataSource = valueChanges;
             _existenceGrid.DataSource = existenceDiffs;
             _existenceHost.Visible = existenceDiffs.Count > 0;

@@ -80,7 +80,10 @@ internal static class BackupManifestService
     private static BackupManifest Deserialize(Stream stream, long length)
     {
         if (length > 16 * 1024 * 1024) throw new InvalidDataException("백업 메타데이터 크기 제한을 초과했습니다.");
-        var manifest = JsonSerializer.Deserialize<BackupManifest>(stream) ?? throw new InvalidDataException("백업 메타데이터가 비어 있습니다.");
+        using var bounded = new MemoryStream();
+        FileTransfer.Copy(stream, bounded, CancellationToken.None, maximum: 16 * 1024 * 1024);
+        bounded.Position = 0;
+        var manifest = JsonSerializer.Deserialize<BackupManifest>(bounded) ?? throw new InvalidDataException("백업 메타데이터가 비어 있습니다.");
         if (manifest.Version != 1 || !manifest.Complete || string.IsNullOrWhiteSpace(manifest.BackupId) ||
             string.IsNullOrWhiteSpace(manifest.SourceRoot) || manifest.Files is null || manifest.SelectedFolders is null || manifest.Files.Count == 0)
             throw new InvalidDataException("백업 메타데이터 버전·완료 상태·파일 목록이 올바르지 않습니다.");
@@ -121,6 +124,8 @@ internal static class BackupManifestService
         else
         {
             using var archive = ZipFile.OpenRead(backup);
+            if (archive.Entries.Count > ZipExtraction.MaximumEntries || archive.Entries.Sum(entry => entry.Length) > ZipExtraction.MaximumBytes)
+                throw new InvalidDataException("ZIP 검증 자원 제한을 초과했습니다.");
             var entries = archive.Entries.Where(entry => !entry.FullName.EndsWith('/') && !entry.FullName.EndsWith('\\') &&
                 !Normalize(entry.FullName).Equals(FileName, StringComparison.OrdinalIgnoreCase)).ToList();
             if (entries.Count != expected.Count) throw new InvalidDataException("백업 파일 수가 메타데이터와 다릅니다.");

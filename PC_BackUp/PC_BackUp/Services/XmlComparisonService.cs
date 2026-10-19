@@ -241,6 +241,7 @@ public sealed class XmlComparisonService
                  fullPath.StartsWith(string.Format("{0}{1}", normalizedBackupRoot, Path.DirectorySeparatorChar),
                      StringComparison.OrdinalIgnoreCase)))
                 continue;
+            if (new FileInfo(file).Length > 8 * 1024 * 1024) throw new InvalidDataException(string.Format("XML 크기 제한 초과: {0}", file));
             var bytes = File.ReadAllBytes(file);
             var relative = Path.GetRelativePath(sourceRoot, file);
             fingerprints[relative] = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
@@ -318,6 +319,7 @@ public sealed class XmlComparisonService
         while ((count = reader.Read(buffer, 0, buffer.Length)) > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (builder.Length > 8 * 1024 * 1024 - count) throw new InvalidDataException("XML 텍스트 크기 제한을 초과했습니다.");
             builder.Append(buffer, 0, count);
         }
         return builder.ToString();

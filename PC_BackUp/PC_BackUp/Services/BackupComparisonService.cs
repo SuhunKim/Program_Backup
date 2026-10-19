@@ -104,7 +104,7 @@ public sealed class BackupComparisonService
 
         var temporaryRoot = Path.Combine(Path.GetTempPath(), "PC_BackUp", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(temporaryRoot);
-        ZipExtraction.SafeExtractToDirectory(record.FullPath, temporaryRoot);
+        ZipExtraction.SafeExtractToDirectory(record.FullPath, temporaryRoot, cancellationToken);
         var extractedFiles = Directory.EnumerateFiles(temporaryRoot, "*", SearchOption.AllDirectories)
             .ToDictionary(file => Path.GetRelativePath(temporaryRoot, file), StringComparer.OrdinalIgnoreCase);
         return (extractedFiles, temporaryRoot);
