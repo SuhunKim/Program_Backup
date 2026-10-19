@@ -11,6 +11,7 @@ public partial class HistoryControl : UserControlBase
     private LogManager? m_oLoggingService;
     private bool m_bIsBusy;
     private bool m_bIsLogView;
+    private bool m_bSynchronizingSelection;
     private CancellationTokenSource? m_oCancellationTokenSource;
     private List<BackupRecord> m_oAllRecords = new();
     private IReadOnlyList<LogEntry> m_oAllLogEntries = Array.Empty<LogEntry>();
@@ -37,6 +38,16 @@ public partial class HistoryControl : UserControlBase
         _grid.CellPainting += UiPaint_ApplyHeader;
         _grid.CellMouseClick += UiClick_ApplyHeader;
         _grid.CellPainting += UiPaint_DiffCell;
+        // [Codex - 2026.10.19] 선택 단위를 실제 복원 단위인 XML 파일로 통일한다.
+        _applyButton.Text = "선택 파일 전체 복원";
+        foreach (var grid in new[] { _grid, _existenceGrid })
+        {
+            grid.CurrentCellDirtyStateChanged += (_, _) =>
+            {
+                if (grid.IsCurrentCellDirty) grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            };
+            grid.CellValueChanged += UiChange_FileSelection;
+        }
         // "XML 파일" 열이 짧아진 만큼(말줄임 처리) 잘린 전체 경로와, 화면엔 안 보이는 정확한 위치
         // (XmlDifference.XmlPath)를 툴팁으로 보여준다. "현재"/"백업" 헤더에는 형광펜 강조 색의
         // 의미를 안내한다(별도 라벨을 추가하지 않고 기존 툴팁 경로를 재사용).
@@ -132,6 +143,28 @@ public partial class HistoryControl : UserControlBase
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "XML 파일", DataPropertyName = nameof(XmlDifference.RelativeFilePath), Width = 150, ReadOnly = true });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "현재", DataPropertyName = nameof(XmlDifference.CurrentValue), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, ReadOnly = true });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "백업", DataPropertyName = nameof(XmlDifference.BackupValue), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, ReadOnly = true });
+    }
+
+    // [Codex - 2026.10.19] 같은 파일의 모든 차이 항목을 함께 선택하고 백업에 없는 파일은 적용하지 않는다.
+    private void UiChange_FileSelection(object? sender, DataGridViewCellEventArgs e)
+    {
+        if (m_bSynchronizingSelection || e.RowIndex < 0 || e.ColumnIndex < 0 ||
+            sender is not DataGridView grid ||
+            grid.Columns[e.ColumnIndex].DataPropertyName != nameof(XmlDifference.Apply) ||
+            grid.Rows[e.RowIndex].DataBoundItem is not XmlDifference selected) return;
+        m_bSynchronizingSelection = true;
+        try
+        {
+            var apply = selected.Apply && selected.Kind != XmlDifferenceKind.ExistsOnlyInCurrent;
+            foreach (var target in new[] { _grid, _existenceGrid })
+            {
+                if (target.DataSource is not List<XmlDifference> items) continue;
+                foreach (var item in items.Where(item => string.Equals(item.RelativeFilePath,
+                             selected.RelativeFilePath, StringComparison.OrdinalIgnoreCase))) item.Apply = apply;
+                target.Refresh();
+            }
+        }
+        finally { m_bSynchronizingSelection = false; }
     }
 
     private void ConfigureLogColumns()
@@ -476,7 +509,9 @@ public partial class HistoryControl : UserControlBase
 
         if (_backupCombo.SelectedItem is not BackupRecord record)
             return;
-        var confirm = MessageBox.Show(this, string.Format("선택한 XML 파일 {0}개를 백업본으로 교체할까요?", selected.Count),
+        var confirm = MessageBox.Show(this, string.Format("선택한 XML 파일 {0}개를 백업본으로 전체 교체합니다.\n선택하지 않은 값을 포함하여 해당 파일의 모든 값이 교체됩니다.\n\n{1}\n\n계속할까요?",
+                selected.Select(item => item.RelativeFilePath).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+                string.Join(Environment.NewLine, selected.Select(item => item.RelativeFilePath).Distinct(StringComparer.OrdinalIgnoreCase))),
             "부분 복원 확인", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
         if (confirm != DialogResult.Yes)
             return;
@@ -517,7 +552,7 @@ public partial class HistoryControl : UserControlBase
         if (_grid.DataSource is not List<XmlDifference> items || items.Count == 0)
             return;
         var next = !items.All(item => item.Apply);
-        foreach (var item in items) item.Apply = next;
+        foreach (var item in items) item.Apply = next && item.Kind != XmlDifferenceKind.ExistsOnlyInCurrent;
         _grid.Refresh();
     }
 
