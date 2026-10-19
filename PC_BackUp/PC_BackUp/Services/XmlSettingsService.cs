@@ -12,7 +12,7 @@ public sealed class XmlSettingsService : ISettingsService
 
     public XmlSettingsService()
     {
-        SettingsFilePath = Path.Combine(ProgramPaths.FindOwnProgramRoot(), ConfigFolderName, SettingsFileName);
+        SettingsFilePath = Path.Combine(ProgramPaths.GetDataRoot(), ConfigFolderName, SettingsFileName);
     }
 
     public string SettingsFilePath { get; }
@@ -63,7 +63,7 @@ public sealed class XmlSettingsService : ISettingsService
             ?? throw new InvalidOperationException("Config 폴더 경로를 확인할 수 없습니다.");
         Directory.CreateDirectory(configFolder);
 
-        var temporaryPath = string.Format("{0}.tmp", SettingsFilePath);
+        var temporaryPath = string.Format("{0}.{1}.tmp", SettingsFilePath, Guid.NewGuid().ToString("N"));
         try
         {
             var writerSettings = new XmlWriterSettings

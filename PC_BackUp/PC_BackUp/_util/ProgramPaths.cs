@@ -34,13 +34,19 @@ internal static class ProgramPaths
     /// PC_BackUp 자신의 프로그램 루트(`_bin`의 형제 경로)를 찾는다.
     /// `XmlSettingsService`(설정 파일 위치)와 `LogManager`(로그 파일 위치)가 함께 사용한다.
     /// </summary>
+    // [Codex - 2026.10.19] 명시 portable 모드와 기존 설정 위치를 보존하고 신규 설치는 사용자 데이터 경로를 쓴다.
+    public static string GetDataRoot()
+    {
+        var programRoot = FindOwnProgramRoot();
+        if (File.Exists(Path.Combine(programRoot, "portable.mode")) ||
+            File.Exists(Path.Combine(programRoot, "Config", "PCBackupSettings.xml"))) return programRoot;
+        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PC_BackUp");
+    }
+
     public static string FindOwnProgramRoot()
     {
         var binFolder = FindAncestorNamed(AppContext.BaseDirectory, new[] { "_bin" });
-        if (binFolder?.Parent is null)
-            throw new DirectoryNotFoundException(
-                string.Format("프로그램 실행 경로에서 _bin 폴더를 찾을 수 없습니다.\n{0}", AppContext.BaseDirectory));
+        return binFolder?.Parent?.FullName ?? AppContext.BaseDirectory;
 
-        return binFolder.Parent.FullName;
     }
 }

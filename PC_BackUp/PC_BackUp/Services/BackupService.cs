@@ -34,7 +34,9 @@ public sealed class BackupService
             {
                 var sourceRoot = Path.GetFullPath(settings.GetSourceRoot());
                 var backupRoot = Path.GetFullPath(settings.BackupRootPath);
+                PathSafety.EnsureNoReparsePoints(backupRoot);
                 Directory.CreateDirectory(backupRoot);
+                PathSafety.EnsureNoReparsePoints(backupRoot);
 
                 var baseName = ResolveAvailableBaseName(backupRoot, kind, suffix);
                 var destination = Path.Combine(backupRoot, string.Format("{0}{1}", baseName, SuffixFor(kind)));
@@ -94,7 +96,7 @@ public sealed class BackupService
         }
         catch (Exception exception)
         {
-            return (OperationResult.Failure(string.Format("백업 중 오류가 발생했습니다.\n{0}", exception.Message)), null);
+            return (OperationResult.Failure(string.Format("백업 중 오류가 발생했습니다.\n{0}", exception.Message), exception), null);
         }
     }
 
@@ -155,7 +157,7 @@ public sealed class BackupService
             try { entries = Directory.GetFileSystemEntries(directory); }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                throw new IOException(string.Format("백업 항목을 읽지 못했습니다: {0}", directory), exception);
+                throw new IOException(string.Format("백업 항목을 읽지 못했습니다: {0}", directory), exception) { Data = { ["Path"] = directory } };
             }
             foreach (var entry in entries)
             {
@@ -165,7 +167,7 @@ public sealed class BackupService
                 try { attributes = File.GetAttributes(fullPath); }
                 catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
                 {
-                    throw new IOException(string.Format("백업 항목을 확인하지 못했습니다: {0}", fullPath), exception);
+                    throw new IOException(string.Format("백업 항목을 확인하지 못했습니다: {0}", fullPath), exception) { Data = { ["Path"] = fullPath } };
                 }
                 if ((attributes & FileAttributes.ReparsePoint) != 0)
                     throw new IOException(string.Format("연결 경로는 완전 백업을 보장할 수 없습니다: {0}", fullPath));

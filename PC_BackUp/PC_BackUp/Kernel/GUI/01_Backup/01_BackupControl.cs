@@ -72,10 +72,7 @@ public partial class BackupControl : UserControlBase
             });
             var result = await m_oBackupService.CreateAsync(settings, kind, suffix, progress, m_oCancellationTokenSource.Token);
             statusLabel.Text = result.Result.Message.Replace(Environment.NewLine, "  ");
-            if (result.Result.Succeeded)
-                m_oLoggingService?.LogInfo(string.Format("백업 완료: {0}", result.Record?.FileName));
-            else
-                m_oLoggingService?.LogError(string.Format("백업 실패: {0}", result.Result.Message));
+            m_oLoggingService?.LogResult("Backup", result.Result);
             MessageBox.Show(this, result.Result.Message, result.Result.Succeeded ? "백업 완료" : "백업 실패",
                 MessageBoxButtons.OK, result.Result.Succeeded ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
         }

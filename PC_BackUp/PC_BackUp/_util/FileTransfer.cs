@@ -31,6 +31,8 @@ internal static class FileTransfer
 
     public static void CopyFile(string source, string destination, CancellationToken token, Action<long>? report = null)
     {
+        PathSafety.EnsureNoReparsePoints(source);
+        PathSafety.EnsureNoReparsePoints(destination);
         using var input = File.OpenRead(source);
         using var output = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None);
         Copy(input, output, token, report);

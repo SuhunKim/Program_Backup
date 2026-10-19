@@ -145,6 +145,7 @@ internal static class RestoreTransaction
         if (failures.Count > 0) throw new AggregateException("원상복구가 완료되지 않았습니다. 복구 기록을 보존합니다.", failures);
         foreach (var directory in journal.CreatedDirectories.AsEnumerable().Reverse())
         {
+            PathSafety.EnsureNoReparsePoints(directory);
             if (Directory.Exists(directory) && !Directory.EnumerateFileSystemEntries(directory).Any()) Directory.Delete(directory);
         }
     }
@@ -186,6 +187,7 @@ internal static class RestoreTransaction
 
     private static void Save(string work, Journal journal)
     {
+        PathSafety.EnsureNoReparsePoints(work);
         var file = Path.Combine(work, "journal.json");
         var pending = string.Format("{0}.tmp", file);
         using (var stream = new FileStream(pending, FileMode.Create, FileAccess.Write, FileShare.None))

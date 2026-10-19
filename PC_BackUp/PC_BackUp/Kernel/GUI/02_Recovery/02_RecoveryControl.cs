@@ -485,18 +485,11 @@ public partial class RecoveryControl : UserControlBase
 		{
             var safetySettings = settings.Snapshot();
             safetySettings.AutoBackupBeforeRestore = _autoSafetyBackupCheckBox.Checked;
-            if (m_oBackupService is null || !await RestoreSafetyPrompt.PrepareAsync(this, safetySettings,
-                m_oRecoveryService, m_oBackupService, null, m_oCancellationTokenSource.Token))
-			{
-				return;
-			}
-
-			var progress = new Progress<int>(value => _progress.Value = value);
-			var result = await m_oRecoveryService.RestoreAsync(record, settings, progress, m_oCancellationTokenSource.Token);
-			if (result.Succeeded)
-				m_oLoggingService?.LogInfo(string.Format("복원 완료: {0}", record.FileName));
-			else
-				m_oLoggingService?.LogError(string.Format("복원 실패: {0}", result.Message));
+            if (m_oBackupService is null) return;
+            var progress = new Progress<int>(value => _progress.Value = value);
+            var result = await RestoreSafetyPrompt.RunAsync(this, safetySettings, m_oRecoveryService, m_oBackupService, progress,
+                m_oCancellationTokenSource.Token, () => m_oRecoveryService.RestoreAsync(record, safetySettings, progress, m_oCancellationTokenSource.Token));
+            m_oLoggingService?.LogResult("Restore", result);
 			MessageBox.Show(this, result.Message, result.Succeeded ? "복원 완료" : "복원 실패",
 					MessageBoxButtons.OK, result.Succeeded ? MessageBoxIcon.Information : MessageBoxIcon.Error);
 		}

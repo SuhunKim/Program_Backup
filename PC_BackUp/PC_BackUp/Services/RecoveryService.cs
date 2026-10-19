@@ -72,7 +72,7 @@ public sealed class RecoveryService
         }
         catch (Exception exception)
         {
-            return OperationResult.Failure(string.Format("대상 프로그램 종료에 실패했습니다.\n{0}", exception.Message));
+            return OperationResult.Failure(string.Format("대상 프로그램 종료에 실패했습니다.\n{0}", exception.Message), exception);
         }
     }
 
@@ -117,7 +117,7 @@ public sealed class RecoveryService
         }
         catch (Exception exception)
         {
-            return OperationResult.Failure(string.Format("복원 중 오류가 발생했습니다.\n{0}", exception.Message));
+            return OperationResult.Failure(string.Format("복원 중 오류가 발생했습니다.\n{0}", exception.Message), exception);
         }
         finally
         {

@@ -188,7 +188,7 @@ public sealed class XmlComparisonService
             }, cancellationToken);
         }
         catch (OperationCanceledException) { return OperationResult.Canceled("파일 복원이 취소되었습니다."); }
-        catch (Exception exception) { return OperationResult.Failure(string.Format("파일 복원 실패: {0}", exception.Message)); }
+        catch (Exception exception) { return OperationResult.Failure(string.Format("파일 복원 실패: {0}", exception.Message), exception); }
         finally { try { if (Directory.Exists(stage)) Directory.Delete(stage, true); } catch { } }
     }
 
