@@ -62,10 +62,12 @@ internal static class BackupManifestService
 
     public static BackupManifest? Read(string backup)
     {
+        PathSafety.EnsureNoReparsePoints(backup);
         if (Directory.Exists(backup))
         {
             var file = Path.Combine(backup, FileName);
             if (!File.Exists(file)) return null;
+            PathSafety.EnsureNoReparsePoints(file);
             using var stream = File.OpenRead(file);
             return Deserialize(stream, stream.Length);
         }
@@ -111,8 +113,7 @@ internal static class BackupManifestService
         var expected = manifest.Files.ToDictionary(item => Normalize(item.Path), StringComparer.OrdinalIgnoreCase);
         if (Directory.Exists(backup))
         {
-            var paths = Directory.EnumerateFiles(backup, "*", new EnumerationOptions { RecurseSubdirectories = true,
-                IgnoreInaccessible = false, AttributesToSkip = FileAttributes.ReparsePoint })
+            var paths = PathSafety.EnumerateFiles(backup)
                 .Where(file => !Normalize(Path.GetRelativePath(backup, file)).Equals(FileName, StringComparison.OrdinalIgnoreCase)).ToList();
             if (paths.Count != expected.Count) throw new InvalidDataException("백업 파일 수가 메타데이터와 다릅니다.");
             foreach (var path in paths)

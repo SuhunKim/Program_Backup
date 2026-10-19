@@ -143,6 +143,7 @@ public sealed class BackupService
     // [Codex - 2026.10.19] 접근 실패는 경로를 포함해 드러내고 저장소·링크는 내려가기 전에 제외한다.
     private static IEnumerable<string> EnumerateSourceFiles(string sourceRoot, string backupRoot)
     {
+        PathSafety.EnsureNoReparsePoints(sourceRoot);
         if ((File.GetAttributes(sourceRoot) & FileAttributes.ReparsePoint) != 0)
             throw new IOException(string.Format("백업 원본이 연결 경로입니다: {0}", sourceRoot));
         var pending = new Stack<string>();

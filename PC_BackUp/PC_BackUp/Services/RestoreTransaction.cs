@@ -55,6 +55,7 @@ internal static class RestoreTransaction
                 entry.Started = true;
                 Save(work, journal); // 변경 전에 기록하여 강제 종료 시에도 원본을 복원한다.
                 var pending = Pending(target, work);
+                PathSafety.EnsureNoReparsePoints(pending);
                 try
                 {
                     FileTransfer.CopyFile(Path.Combine(work, string.Format("new-{0}", index)), pending, token, count =>
@@ -63,6 +64,7 @@ internal static class RestoreTransaction
                         progress?.Report((int)Math.Min(99, appliedBytes * 100d / Math.Max(1, totalBytes)));
                     });
                     token.ThrowIfCancellationRequested();
+                    PathSafety.EnsureNoReparsePoints(target);
                     File.Move(pending, target, true);
                 }
                 finally { if (File.Exists(pending)) File.Delete(pending); }
@@ -130,6 +132,7 @@ internal static class RestoreTransaction
                 if (entry.Existed)
                 {
                     FileTransfer.CopyFile(Path.Combine(work, string.Format("old-{0}", index)), pending, CancellationToken.None);
+                    PathSafety.EnsureNoReparsePoints(target);
                     File.Move(pending, target, true);
                 }
                 else if (File.Exists(target)) File.Delete(target);
@@ -148,6 +151,7 @@ internal static class RestoreTransaction
 
     private static void EnsureDirectory(string directory, string work, Journal journal)
     {
+        PathSafety.EnsureNoReparsePoints(directory);
         var missing = new Stack<string>();
         for (var current = directory; !Directory.Exists(current); current = Path.GetDirectoryName(current)!)
         {
@@ -159,7 +163,9 @@ internal static class RestoreTransaction
             var path = missing.Pop();
             journal.CreatedDirectories.Add(path);
             Save(work, journal);
+            PathSafety.EnsureNoReparsePoints(path);
             Directory.CreateDirectory(path);
+            PathSafety.EnsureNoReparsePoints(path);
         }
     }
 
@@ -187,15 +193,7 @@ internal static class RestoreTransaction
         File.Move(pending, file, true);
     }
 
-    private static string Target(string root, string relative)
-    {
-        if (string.IsNullOrWhiteSpace(relative) || Path.IsPathRooted(relative) || relative.Contains(':'))
-            throw new InvalidDataException("복원 상대 경로가 올바르지 않습니다.");
-        var target = Path.GetFullPath(Path.Combine(root, relative));
-        if (!target.StartsWith(string.Format("{0}{1}", Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)), Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException("복원 경로가 대상 폴더를 벗어났습니다.");
-        return target;
-    }
+    private static string Target(string root, string relative) => PathSafety.ResolveChild(root, relative);
 
     private static string Pending(string target, string work) => string.Format("{0}.pcbackup-{1}.tmp", target, Path.GetFileName(work));
     private static void TryClean(string work) { try { Directory.Delete(work, true); } catch { /* 재시작 시 완료 기록 정리를 다시 시도한다. */ } }

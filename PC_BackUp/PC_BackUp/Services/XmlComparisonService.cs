@@ -257,7 +257,7 @@ public sealed class XmlComparisonService
         if (Directory.Exists(record.FullPath))
         {
             // 구버전 선별 백업(폴더 복사 방식)은 폴더 그대로 읽는다.
-            foreach (var file in Directory.EnumerateFiles(record.FullPath, "*.xml", SearchOption.AllDirectories))
+            foreach (var file in PathSafety.EnumerateFiles(record.FullPath).Where(file => file.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 documents[Path.GetRelativePath(record.FullPath, file)] = File.ReadAllText(file);
@@ -377,6 +377,7 @@ public sealed class XmlComparisonService
 
     private static void EnsureChildPath(string candidate, string parent)
     {
+        PathSafety.EnsureNoReparsePoints(candidate);
         var normalizedParent = Path.TrimEndingDirectorySeparator(Path.GetFullPath(parent));
         if (!candidate.StartsWith(string.Format("{0}{1}", normalizedParent, Path.DirectorySeparatorChar),
                 StringComparison.OrdinalIgnoreCase))
