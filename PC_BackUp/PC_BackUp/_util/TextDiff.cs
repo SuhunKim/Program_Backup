@@ -18,6 +18,12 @@ internal static class TextDiff
         left ??= string.Empty;
         right ??= string.Empty;
 
+        // [Codex - 2026.10.19] 긴 값의 이차원 행렬 할당을 제한한다. 정확한 값 비교는 이미 서비스에서 수행한다.
+        if ((long)(left.Length + 1) * (right.Length + 1) > 1_000_000)
+        {
+            if (string.Equals(left, right, StringComparison.Ordinal)) return new[] { new Segment(left, SegmentKind.Equal) };
+            return new[] { new Segment(left, SegmentKind.RemovedFromLeft), new Segment(right, SegmentKind.AddedInRight) };
+        }
         // lengths[i, j] = left[i..]와 right[j..]의 최장 공통 부분열 길이 (뒤에서부터 채운다).
         var lengths = new int[left.Length + 1, right.Length + 1];
         for (var i = left.Length - 1; i >= 0; i--)
