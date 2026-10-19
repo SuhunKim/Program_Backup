@@ -19,6 +19,8 @@ namespace PC_BackUp
 	public sealed class XmlDifference
 	{
 		public bool Apply { get; set; }
+        public string? ExpectedCurrentHash { get; set; }
+        public string? ExpectedBackupTextHash { get; set; }
 		public required XmlDifferenceKind Kind { get; init; }
 		public required string RelativeFilePath { get; init; }
 		public string XmlPath { get; init; } = string.Empty;

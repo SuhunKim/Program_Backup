@@ -12,6 +12,9 @@ public partial class HistoryControl : UserControlBase
     private bool m_bIsBusy;
     private bool m_bIsLogView;
     private bool m_bSynchronizingSelection;
+    private AppSettings? m_oComparedSettings;
+    private RecoveryService? m_oRecoveryService;
+    private BackupService? m_oBackupService;
     private CancellationTokenSource? m_oCancellationTokenSource;
     private List<BackupRecord> m_oAllRecords = new();
     private IReadOnlyList<LogEntry> m_oAllLogEntries = Array.Empty<LogEntry>();
@@ -81,6 +84,8 @@ public partial class HistoryControl : UserControlBase
             };
         };
 
+        _backupCombo.SelectedIndexChanged += (_, _) => InvalidateComparison();
+        _sourceCombo.SelectedIndexChanged += (_, _) => InvalidateComparison();
         _logViewButton.Click += (_, _) => ToggleLogView();
         _cancelButton.Click += (_, _) => m_oCancellationTokenSource?.Cancel();
     }
@@ -89,11 +94,13 @@ public partial class HistoryControl : UserControlBase
         ISettingsService settingsService,
         BackupCatalogService catalogService,
         XmlComparisonService comparisonService,
-        LogManager loggingService) : this()
+        LogManager loggingService, RecoveryService recoveryService, BackupService backupService) : this()
     {
         m_oSettingsService = settingsService;
         m_oCatalogService = catalogService;
         m_oComparisonService = comparisonService;
+        m_oRecoveryService = recoveryService;
+        m_oBackupService = backupService;
         m_oLoggingService = loggingService;
     }
 
@@ -424,7 +431,9 @@ public partial class HistoryControl : UserControlBase
         try
         {
             var progress = new Progress<int>(value => _progress.Value = value);
-            var differences = await m_oComparisonService.CompareAsync(m_oSettingsService.Load(), sourceRecord, destinationRecord, progress, m_oCancellationTokenSource.Token);
+            var compareSettings = m_oSettingsService.Load().Snapshot();
+            var differences = await m_oComparisonService.CompareAsync(compareSettings, sourceRecord, destinationRecord, progress, m_oCancellationTokenSource.Token);
+            m_oComparedSettings = sourceIsCurrent ? compareSettings : null;
             // 성격이 다른 두 종류를 서로 다른 목록에 나눠 담는다 — "설정값 차이"(실제 값이 다름)는
             // _grid(빨강/노랑 강조), "존재 차이"(파일이 한쪽에만 있음)는 _existenceGrid(경로만).
             var valueChanges = differences.Where(item => item.Kind == XmlDifferenceKind.ValueChanged).ToList();
@@ -473,7 +482,7 @@ public partial class HistoryControl : UserControlBase
     {
         var hasValueDifferences = _grid.DataSource is List<XmlDifference> items && items.Count > 0;
         var hasExistenceDifferences = _existenceGrid.DataSource is List<XmlDifference> existenceItems && existenceItems.Count > 0;
-        _applyButton.Enabled = (hasValueDifferences || hasExistenceDifferences) && _sourceIsCurrentCheckBox.Checked;
+        _applyButton.Enabled = !m_bIsBusy && m_oComparedSettings is not null && (hasValueDifferences || hasExistenceDifferences) && _sourceIsCurrentCheckBox.Checked;
     }
 
     /// <summary>ConfigureCompareColumns()가 고정 순서(적용/XML 파일/현재/백업)로 만든 열 헤더를
@@ -487,8 +496,16 @@ public partial class HistoryControl : UserControlBase
 
     private void UiChange_SourceIsCurrent(object? sender, EventArgs e)
     {
+        InvalidateComparison();
         _sourceCombo.Enabled = !_sourceIsCurrentCheckBox.Checked;
         UpdateApplyAvailability();
+    }
+
+    // [Codex - 2026.10.19] 비교 대상을 바꾼 후 이전 체크 결과를 재사용하지 않는다.
+    private void InvalidateComparison()
+    {
+        m_oComparedSettings = null;
+        _applyButton.Enabled = false;
     }
 
     private async void UiClick_Apply(object? sender, EventArgs e)
@@ -496,6 +513,14 @@ public partial class HistoryControl : UserControlBase
         if (m_oSettingsService is null || m_oComparisonService is null || m_bIsBusy) return;
         if (!_sourceIsCurrentCheckBox.Checked)
             return; // Source가 현재가 아니면(백업끼리 비교) Apply는 의미가 없다 — 버튼도 비활성화되어 있다.
+        if (m_oComparedSettings is null || m_oRecoveryService is null || m_oBackupService is null) return;
+        var settings = m_oSettingsService.Load().Snapshot();
+        if (System.Text.Json.JsonSerializer.Serialize(settings) != System.Text.Json.JsonSerializer.Serialize(m_oComparedSettings))
+        {
+            InvalidateComparison();
+            MessageBox.Show(this, "비교 후 설정이 변경되었습니다. 다시 비교하세요.", "비교 필요");
+            return;
+        }
         _grid.EndEdit();
         _existenceGrid.EndEdit();
         // 설정값 차이/존재 차이 두 목록에서 체크한 항목을 합쳐서 한 번에 적용한다 — Apply 로직
@@ -527,7 +552,9 @@ public partial class HistoryControl : UserControlBase
         try
         {
             var progress = new Progress<int>(value => _progress.Value = value);
-            var result = await m_oComparisonService.ApplySelectedAsync(m_oSettingsService.Load().GetSourceRoot(), record, selected, progress, m_oCancellationTokenSource.Token);
+            if (!await RestoreSafetyPrompt.PrepareAsync(this, settings, m_oRecoveryService, m_oBackupService, progress, m_oCancellationTokenSource.Token)) return;
+            var result = await m_oComparisonService.ApplySelectedAsync(settings, record, selected, progress, m_oCancellationTokenSource.Token);
+            InvalidateComparison();
             if (result.Succeeded)
                 m_oLoggingService?.LogInfo(string.Format("설정 적용: {0}", result.Message));
             else
@@ -594,12 +621,18 @@ public partial class HistoryControl : UserControlBase
 
     private void SetBusy(bool busy)
     {
+        _backupCombo.Enabled = !busy;
+        _sourceCombo.Enabled = !busy && !_sourceIsCurrentCheckBox.Checked;
+        _sourceIsCurrentCheckBox.Enabled = !busy;
+        _calendar.Enabled = !busy;
+        _applyButton.Enabled = false;
         _compareButton.Enabled = !busy;
         _logViewButton.Enabled = !busy;
         _cancelButton.Visible = busy;
         // 복원 화면과 동일하게 막연한 진행 애니메이션 대신 실제 진행률(%)로 표시한다.
         _progress.Style = ProgressBarStyle.Blocks;
         _progress.Value = 0;
+        if (!busy) UpdateApplyAvailability();
     }
 
     /// <summary>하단 상태 표시줄(_summaryLabel)의 스타일을 상태에 맞게 바꾼다. "설정이 같습니다"
