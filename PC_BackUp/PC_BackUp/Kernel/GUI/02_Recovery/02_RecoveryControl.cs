@@ -11,6 +11,7 @@ public partial class RecoveryControl : UserControlBase
 	private BackupComparisonService? m_oBackupComparisonService;
 	private LogManager? m_oLoggingService;
 	private bool m_bIsBusy;
+    private int m_iCatalogVersion;
 	private CancellationTokenSource? m_oCancellationTokenSource;
 	private BackupRecord? m_oPendingSelectedRecord;
 	private readonly System.Windows.Forms.Timer m_oRefreshDebounceTimer = new() { Interval = 500 };
@@ -149,14 +150,18 @@ public partial class RecoveryControl : UserControlBase
 			_workspaceSplit.SplitterDistance = panel1Width;
 	}
 
-	private void RefreshCatalog()
+	private async void RefreshCatalog()
 	{
+        var version = ++m_iCatalogVersion;
+        try
+        {
 		if (m_oSettingsService is null || m_oCatalogService is null) return;
 		ApplyCalendarSizing();
 		var settings = m_oSettingsService.Load();
 		_autoSafetyBackupCheckBox.Checked = settings.AutoBackupBeforeRestore;
 		_compareBeforeRestoreCheckBox.Checked = settings.CompareBeforeRestore;
-		var catalog = m_oCatalogService.Refresh(settings.BackupRootPath);
+        var catalog = await m_oCatalogService.RefreshAsync(settings.BackupRootPath);
+        if (IsDisposed || Disposing || version != m_iCatalogVersion) return;
 		_calendar.BoldedDates = catalog.Keys.ToArray();
 		_calendar.UpdateBoldedDates();
 		var selectedDate = m_oPendingSelectedRecord?.CreatedAt.Date ?? _calendar.SelectionStart;
@@ -164,6 +169,9 @@ public partial class RecoveryControl : UserControlBase
 		LoadDate(selectedDate);
 		SelectPendingBackup();
 		WatchBackupFolder(settings.BackupRootPath);
+        }
+        catch (Exception exception)
+        { if (!IsDisposed && version == m_iCatalogVersion) _selectedBackupMetaLabel.Text = string.Format("목록 조회 실패: {0}", exception.Message); }
 	}
 
 	// [Codex - 2026.09.18] 대시보드에서 전달된 백업과 같은 경로의 행을 다시 선택한다.
@@ -301,7 +309,7 @@ public partial class RecoveryControl : UserControlBase
 		_emptyLabel.Visible = _grid.Rows.Count == 0;
 
 		_summaryDateValue.Text = string.Format("{0:yyyy년 M월 d일}", date);
-		var totalBytes = records.Sum(record => record.SizeBytes);
+		var totalBytes = records.Sum(record => Math.Max(0, record.SizeBytes));
 		_summaryCountValue.Text = string.Format("백업 {0}개  ·  총 {1}", records.Count, BackupRecord.FormatBytes(totalBytes));
 
 		UpdateSelectedBackupDetails();
