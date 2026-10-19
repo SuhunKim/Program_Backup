@@ -147,24 +147,9 @@ public sealed class RecoveryService
             AttributesToSkip = FileAttributes.ReparsePoint
         }).ToList();
 
-        for (var index = 0; index < files.Count; index++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var relativePath = Path.GetRelativePath(sourceRoot, files[index]);
-            if (relativePath.Equals(BackupManifestService.FileName, StringComparison.OrdinalIgnoreCase)) continue;
-            var targetPath = Path.GetFullPath(Path.Combine(destinationRoot, relativePath));
-            EnsureChildPath(targetPath, destinationRoot);
-            Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
-            File.Copy(files[index], targetPath, true);
-            progress?.Report((index + 1) * 100 / files.Count);
-        }
-    }
-
-    private static void EnsureChildPath(string candidate, string parent)
-    {
-        var normalizedParent = Path.TrimEndingDirectorySeparator(Path.GetFullPath(parent));
-        if (!candidate.StartsWith(string.Format("{0}{1}", normalizedParent, Path.DirectorySeparatorChar),
-                StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException("백업에 대상 경로를 벗어나는 파일이 포함되어 있습니다.");
+        // [Codex - 2026.10.19] 쓰기와 원상복구는 재시작 가능한 공통 트랜잭션이 담당한다.
+        var sources = files.Where(file => !Path.GetRelativePath(sourceRoot, file).Equals(BackupManifestService.FileName, StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(file => Path.GetRelativePath(sourceRoot, file), file => file, StringComparer.OrdinalIgnoreCase);
+        RestoreTransaction.Apply(sources, destinationRoot, progress, cancellationToken);
     }
 }
