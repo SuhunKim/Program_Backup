@@ -35,13 +35,15 @@ public sealed partial class BackupCatalogService
             if (!TryParseBackupFileName(name, out var createdAt, out var kind))
                 continue;
 
+            var metadata = BackupManifestService.Inspect(path);
             Add(newRecordsByDate, new BackupRecord
             {
-                CreatedAt = createdAt,
+                CreatedAt = metadata.Manifest?.CreatedUtc.ToLocalTime() ?? createdAt,
+                Manifest = metadata.Manifest, MetadataError = metadata.Error,
                 Kind = kind,
                 FullPath = path,
                 FileName = name,
-                SizeBytes = File.Exists(path) ? new FileInfo(path).Length : GetDirectorySize(path)
+                SizeBytes = File.Exists(path) ? new FileInfo(path).Length : metadata.Manifest?.Files.Sum(item => item.Length) ?? GetDirectorySize(path)
             });
         }
 
