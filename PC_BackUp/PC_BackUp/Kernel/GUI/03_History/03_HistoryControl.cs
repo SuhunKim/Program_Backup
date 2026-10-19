@@ -447,6 +447,10 @@ public partial class HistoryControl : UserControlBase
         }
         catch (Exception exception)
         {
+            // [Codex - 2026.10.19] 이전 성공 결과로 손상 파일을 적용하지 못하도록 결과를 폐기한다.
+            _grid.DataSource = null;
+            _existenceGrid.DataSource = null;
+            _applyButton.Enabled = false;
             m_oLoggingService?.LogError("XML 비교 중 오류가 발생했습니다.", exception);
             MessageBox.Show(this, exception.Message, "비교 실패", MessageBoxButtons.OK, MessageBoxIcon.Error);
             SetSummaryStatus("비교 중 오류가 발생했습니다.", isSuccess: false);
