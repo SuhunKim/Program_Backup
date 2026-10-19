@@ -38,6 +38,14 @@ namespace PC_BackUp
 			return ancestor?.Parent?.FullName ?? exeDirectory;
 		}
 
+        // [Codex - 2026.10.19] 작업 도중 UI 설정 변경과 분리된 스냅샷을 사용한다.
+        public AppSettings Snapshot() => new()
+        {
+            TargetProjectName = TargetProjectName, ExecutablePath = ExecutablePath,
+            BackupRootPath = BackupRootPath, SelectiveFolderNames = new List<string>(SelectiveFolderNames),
+            AutoBackupBeforeRestore = AutoBackupBeforeRestore, CompareBeforeRestore = CompareBeforeRestore
+        };
+
 		public IReadOnlyList<string> GetSelectiveFolderNames()
 		{
 			return SelectiveFolderNames

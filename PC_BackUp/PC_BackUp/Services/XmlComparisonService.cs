@@ -20,6 +20,8 @@ public sealed class XmlComparisonService
     {
         try
         {
+            settings = settings.Snapshot();
+            using var operation = OperationCoordinator.Acquire(settings.GetSourceRoot(), settings.BackupRootPath);
             return await CompareCoreAsync(settings, sourceRecord, destinationRecord, progress, cancellationToken);
         }
         catch (OperationCanceledException)
@@ -124,6 +126,7 @@ public sealed class XmlComparisonService
     {
         try
         {
+            using var operation = OperationCoordinator.Acquire(currentRoot, Path.GetDirectoryName(destinationRecord.FullPath)!);
             var items = selected.Where(item => item.Kind != XmlDifferenceKind.ExistsOnlyInCurrent)
                 .DistinctBy(item => item.RelativeFilePath, StringComparer.OrdinalIgnoreCase).ToList();
             if (items.Count == 0)

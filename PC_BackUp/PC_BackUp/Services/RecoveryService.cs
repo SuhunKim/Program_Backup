@@ -84,6 +84,7 @@ public sealed class RecoveryService
     {
         // 복원은 대상 파일(실행 파일 포함)이 사라진 상황을 되살리는 기능이므로,
         // 실행 파일이 지금 실제로 존재하는지는 검사하지 않는다 — 경로 설정 자체만 확인한다.
+        settings = settings.Snapshot();
         var errors = settings.Validate(requireExecutableExists: false);
         if (errors.Count > 0)
             return OperationResult.Failure(string.Join(Environment.NewLine, errors));
@@ -93,6 +94,7 @@ public sealed class RecoveryService
         var temporaryRoot = Path.Combine(Path.GetTempPath(), "PC_BackUp", Guid.NewGuid().ToString("N"));
         try
         {
+            using var operation = OperationCoordinator.Acquire(settings.GetSourceRoot(), settings.BackupRootPath);
             return await Task.Run(() =>
             {
                 var restoreSource = record.FullPath;

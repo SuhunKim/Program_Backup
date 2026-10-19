@@ -10,6 +10,8 @@ public sealed class BackupComparisonService
     {
         try
         {
+            settings = settings.Snapshot();
+            using var operation = OperationCoordinator.Acquire(settings.GetSourceRoot(), settings.BackupRootPath);
             var differences = await Task.Run(() =>
                 Compare(record, settings.GetSourceRoot(), settings.BackupRootPath, progress, cancellationToken));
             return new BackupComparisonResult { Differences = differences };
