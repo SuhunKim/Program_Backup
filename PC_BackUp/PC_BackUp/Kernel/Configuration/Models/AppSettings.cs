@@ -8,6 +8,7 @@ namespace PC_BackUp
 	{
 		public string TargetProjectName { get; set; } = string.Empty;
 		public string ExecutablePath { get; set; } = string.Empty;
+        public string SourceRootPath { get; set; } = string.Empty;
 		public string BackupRootPath { get; set; } = string.Empty;
 
 		// 기본값을 여기서 미리 채워두면 안 된다 — XmlSerializer는 컬렉션 속성을 역직렬화할 때
@@ -30,6 +31,7 @@ namespace PC_BackUp
 		/// </summary>
 		public string GetSourceRoot()
 		{
+            if (!string.IsNullOrWhiteSpace(SourceRootPath)) return SourceRootPath;
 			var exeDirectory = Path.GetDirectoryName(ExecutablePath);
 			if (string.IsNullOrEmpty(exeDirectory))
 				return string.Empty;
@@ -37,6 +39,14 @@ namespace PC_BackUp
 			var ancestor = ProgramPaths.FindAncestorNamed(exeDirectory, SelectiveFolderNames);
 			return ancestor?.Parent?.FullName ?? exeDirectory;
 		}
+
+        // [Codex - 2026.10.19] 작업 도중 UI 설정 변경과 분리된 스냅샷을 사용한다.
+        public AppSettings Snapshot() => new()
+        {
+            TargetProjectName = TargetProjectName, ExecutablePath = ExecutablePath, SourceRootPath = GetSourceRoot(),
+            BackupRootPath = BackupRootPath, SelectiveFolderNames = new List<string>(SelectiveFolderNames),
+            AutoBackupBeforeRestore = AutoBackupBeforeRestore, CompareBeforeRestore = CompareBeforeRestore
+        };
 
 		public IReadOnlyList<string> GetSelectiveFolderNames()
 		{
@@ -71,7 +81,7 @@ namespace PC_BackUp
 			else
 			{
 				foreach (var name in rawNames)
-					if (!FileNaming.IsValidFolderName(name.Trim()))
+					if (!FileNaming.IsValidRelativeFolder(name.Trim()))
 						errors.Add(string.Format("'{0}' 폴더명이 올바르지 않습니다.", name));
 
 				if (rawNames.Select(name => name.Trim())
@@ -79,6 +89,27 @@ namespace PC_BackUp
 					errors.Add("선별 백업 폴더명은 서로 달라야 합니다.");
 			}
 
+            // [Codex - 2026.10.19] 원본·실행 파일·저장소 관계를 경계 구분자를 포함해 검증한다.
+            try
+            {
+                var root = GetSourceRoot();
+                if (!Path.IsPathFullyQualified(root) || !Path.IsPathFullyQualified(ExecutablePath) || !Path.IsPathFullyQualified(BackupRootPath))
+                    errors.Add("원본·실행 파일·백업은 절대 경로로 지정하세요.");
+                else
+                {
+                    root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+                    var backup = Path.TrimEndingDirectorySeparator(Path.GetFullPath(BackupRootPath));
+                    var separator = Path.DirectorySeparatorChar;
+                    if (string.Equals(root, Path.TrimEndingDirectorySeparator(Path.GetPathRoot(root)!), StringComparison.OrdinalIgnoreCase))
+                        errors.Add("드라이브·공유 루트를 원본으로 사용할 수 없습니다.");
+                    if (root.Equals(backup, StringComparison.OrdinalIgnoreCase) || root.StartsWith(string.Format("{0}{1}", backup, separator), StringComparison.OrdinalIgnoreCase))
+                        errors.Add("백업 저장소는 원본과 같거나 원본의 상위 폴더일 수 없습니다.");
+                    if (!Path.GetFullPath(ExecutablePath).StartsWith(string.Format("{0}{1}", root, separator), StringComparison.OrdinalIgnoreCase))
+                        errors.Add("실행 파일은 원본 루트 아래에 있어야 합니다.");
+                }
+            }
+            catch (Exception exception) when (exception is ArgumentException or NotSupportedException or IOException)
+            { errors.Add("원본·백업 경로 형식을 확인하세요."); }
 			return errors;
 		}
 	}

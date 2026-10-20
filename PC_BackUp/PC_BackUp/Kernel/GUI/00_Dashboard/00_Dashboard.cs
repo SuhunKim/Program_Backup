@@ -12,6 +12,7 @@ public partial class _00_Dashboard : UserControlBase
     private readonly Action<MainMenuId>? m_oNavigate;
     private readonly Action<BackupRecord?>? m_oOpenRecovery;
     private BackupRecord? m_oSelectedRecentRecord;
+    private int m_iCatalogVersion;
     public _00_Dashboard()
     {
         InitializeComponent();
@@ -29,7 +30,7 @@ public partial class _00_Dashboard : UserControlBase
 
     public override void OnMenuSelected() => RefreshDashboard();
 
-    private void RefreshDashboard()
+    private async void RefreshDashboard()
     {
         if (m_oSettingsService is null || m_oCatalogService is null)
         {
@@ -39,18 +40,22 @@ public partial class _00_Dashboard : UserControlBase
 
         try
         {
+            var version = ++m_iCatalogVersion;
             var settings = m_oSettingsService.Load();
-            var records = m_oCatalogService.Refresh(settings.BackupRootPath).Values.SelectMany(value => value)
-                .OrderByDescending(record => record.CreatedAt).ToList();
+            _summaryStatusValue.Text = "조회 중";
+            var catalog = await m_oCatalogService.RefreshAsync(settings.BackupRootPath);
+            if (IsDisposed || Disposing || version != m_iCatalogVersion) return;
+            var records = catalog.Values.SelectMany(value => value).OrderByDescending(record => record.CreatedAt).ToList();
             var latest = records.FirstOrDefault();
-            var errors = settings.Validate();
+            var errors = settings.Validate().ToList();
+            if (!string.IsNullOrEmpty(LogManager.LastWriteError)) errors.Add(string.Format("로그 기록 확인 필요: {0}", LogManager.LastWriteError));
             _summaryDateValue.Text = latest is null ? "백업 없음" : latest.CreatedAt.ToString("yyyy-MM-dd HH:mm");
             _summaryCountValue.Text = string.Format("{0:N0}건", records.Count);
-            _summarySizeValue.Text = BackupRecord.FormatBytes(records.Sum(record => record.SizeBytes));
+            _summarySizeValue.Text = string.Format("{0}{1}", BackupRecord.FormatBytes(records.Sum(record => Math.Max(0, record.SizeBytes))), records.Any(record => record.SizeBytes < 0) ? " + 미확인" : string.Empty);
             m_oSelectedRecentRecord = null;
             m_oRecentGrid.DataSource = records.Take(5).ToList();
             m_oRecentGrid.ClearSelection();
-            _summaryStatusValue.Text = errors.Count == 0 ? "정상" : "확인 필요";
+            _summaryStatusValue.Text = errors.Count == 0 ? "설정 유효" : "확인 필요";
             m_oWarningCard.Visible = errors.Count > 0;
             m_oWarningLabel.Text = string.Join("  ·  ", errors);
         }

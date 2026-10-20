@@ -10,6 +10,8 @@ public sealed class BackupComparisonService
     {
         try
         {
+            settings = settings.Snapshot();
+            using var operation = OperationCoordinator.Acquire(settings.GetSourceRoot(), settings.BackupRootPath);
             var differences = await Task.Run(() =>
                 Compare(record, settings.GetSourceRoot(), settings.BackupRootPath, progress, cancellationToken));
             return new BackupComparisonResult { Differences = differences };
@@ -33,6 +35,8 @@ public sealed class BackupComparisonService
             var backupResult = ReadBackupFiles(record, cancellationToken);
             temporaryRoot = backupResult.TemporaryRoot;
             var backupFiles = backupResult.Files;
+            backupFiles.Remove(BackupManifestService.FileName);
+            var manifest = BackupManifestService.Read(record.FullPath);
             var backupRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(backupRootPath));
             var currentFiles = Directory.Exists(currentRoot)
                 ? Directory.EnumerateFiles(currentRoot, "*", CurrentRootEnumerationOptions)
@@ -41,6 +45,10 @@ public sealed class BackupComparisonService
                     .ToDictionary(file => Path.GetRelativePath(currentRoot, file), StringComparer.OrdinalIgnoreCase)
                 : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+            currentFiles.Remove(BackupManifestService.FileName);
+            if (manifest?.Kind == BackupKind.SelectiveFolders)
+                currentFiles = currentFiles.Where(item => SelectiveFolderMatch.IsInsideAnyFolder(item.Key, manifest.SelectedFolders))
+                    .ToDictionary(item => item.Key, item => item.Value, StringComparer.OrdinalIgnoreCase);
             var results = new List<BackupFileDifference>();
             var relativePaths = backupFiles.Keys.Union(currentFiles.Keys, StringComparer.OrdinalIgnoreCase).ToList();
             for (var index = 0; index < relativePaths.Count; index++)
@@ -89,17 +97,27 @@ public sealed class BackupComparisonService
     {
         if (Directory.Exists(record.FullPath))
         {
-            var files = Directory.EnumerateFiles(record.FullPath, "*", SearchOption.AllDirectories)
+            var files = PathSafety.EnumerateFiles(record.FullPath)
                 .ToDictionary(file => Path.GetRelativePath(record.FullPath, file), StringComparer.OrdinalIgnoreCase);
             return (files, string.Empty);
         }
 
         var temporaryRoot = Path.Combine(Path.GetTempPath(), "PC_BackUp", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(temporaryRoot);
-        ZipExtraction.SafeExtractToDirectory(record.FullPath, temporaryRoot);
-        var extractedFiles = Directory.EnumerateFiles(temporaryRoot, "*", SearchOption.AllDirectories)
-            .ToDictionary(file => Path.GetRelativePath(temporaryRoot, file), StringComparer.OrdinalIgnoreCase);
-        return (extractedFiles, temporaryRoot);
+        // [Codex - 2026.10.19] 반환 전 실패의 정리 책임은 임시 폴더를 생성한 범위에 둔다.
+        try
+        {
+            ZipExtraction.SafeExtractToDirectory(record.FullPath, temporaryRoot, cancellationToken);
+            var extractedFiles = Directory.EnumerateFiles(temporaryRoot, "*", SearchOption.AllDirectories)
+                .ToDictionary(file => Path.GetRelativePath(temporaryRoot, file), StringComparer.OrdinalIgnoreCase);
+            return (extractedFiles, temporaryRoot); // 성공 후에만 호출자에게 정리 소유권을 넘긴다.
+        }
+        catch
+        {
+            try { Directory.Delete(temporaryRoot, true); }
+            catch { /* 원래 해제·취소 예외를 정리 실패로 덮지 않는다. */ }
+            throw;
+        }
     }
 
     private static bool FilesEqual(string leftPath, string rightPath, CancellationToken cancellationToken)

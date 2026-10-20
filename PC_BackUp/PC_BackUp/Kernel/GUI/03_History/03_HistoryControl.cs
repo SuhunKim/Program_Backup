@@ -11,6 +11,12 @@ public partial class HistoryControl : UserControlBase
     private LogManager? m_oLoggingService;
     private bool m_bIsBusy;
     private bool m_bIsLogView;
+    private int m_iCatalogVersion;
+    private Dictionary<XmlDifference, IReadOnlyList<TextDiff.Segment>> m_oDiffSegments = new();
+    private bool m_bSynchronizingSelection;
+    private AppSettings? m_oComparedSettings;
+    private RecoveryService? m_oRecoveryService;
+    private BackupService? m_oBackupService;
     private CancellationTokenSource? m_oCancellationTokenSource;
     private List<BackupRecord> m_oAllRecords = new();
     private IReadOnlyList<LogEntry> m_oAllLogEntries = Array.Empty<LogEntry>();
@@ -37,6 +43,16 @@ public partial class HistoryControl : UserControlBase
         _grid.CellPainting += UiPaint_ApplyHeader;
         _grid.CellMouseClick += UiClick_ApplyHeader;
         _grid.CellPainting += UiPaint_DiffCell;
+        // [Codex - 2026.10.19] 선택 단위를 실제 복원 단위인 XML 파일로 통일한다.
+        _applyButton.Text = "선택 파일 전체 복원";
+        foreach (var grid in new[] { _grid, _existenceGrid })
+        {
+            grid.CurrentCellDirtyStateChanged += (_, _) =>
+            {
+                if (grid.IsCurrentCellDirty) grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            };
+            grid.CellValueChanged += UiChange_FileSelection;
+        }
         // "XML 파일" 열이 짧아진 만큼(말줄임 처리) 잘린 전체 경로와, 화면엔 안 보이는 정확한 위치
         // (XmlDifference.XmlPath)를 툴팁으로 보여준다. "현재"/"백업" 헤더에는 형광펜 강조 색의
         // 의미를 안내한다(별도 라벨을 추가하지 않고 기존 툴팁 경로를 재사용).
@@ -70,6 +86,8 @@ public partial class HistoryControl : UserControlBase
             };
         };
 
+        _backupCombo.SelectedIndexChanged += (_, _) => InvalidateComparison();
+        _sourceCombo.SelectedIndexChanged += (_, _) => InvalidateComparison();
         _logViewButton.Click += (_, _) => ToggleLogView();
         _cancelButton.Click += (_, _) => m_oCancellationTokenSource?.Cancel();
     }
@@ -78,11 +96,13 @@ public partial class HistoryControl : UserControlBase
         ISettingsService settingsService,
         BackupCatalogService catalogService,
         XmlComparisonService comparisonService,
-        LogManager loggingService) : this()
+        LogManager loggingService, RecoveryService recoveryService, BackupService backupService) : this()
     {
         m_oSettingsService = settingsService;
         m_oCatalogService = catalogService;
         m_oComparisonService = comparisonService;
+        m_oRecoveryService = recoveryService;
+        m_oBackupService = backupService;
         m_oLoggingService = loggingService;
     }
 
@@ -132,6 +152,28 @@ public partial class HistoryControl : UserControlBase
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "XML 파일", DataPropertyName = nameof(XmlDifference.RelativeFilePath), Width = 150, ReadOnly = true });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "현재", DataPropertyName = nameof(XmlDifference.CurrentValue), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, ReadOnly = true });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "백업", DataPropertyName = nameof(XmlDifference.BackupValue), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, ReadOnly = true });
+    }
+
+    // [Codex - 2026.10.19] 같은 파일의 모든 차이 항목을 함께 선택하고 백업에 없는 파일은 적용하지 않는다.
+    private void UiChange_FileSelection(object? sender, DataGridViewCellEventArgs e)
+    {
+        if (m_bSynchronizingSelection || e.RowIndex < 0 || e.ColumnIndex < 0 ||
+            sender is not DataGridView grid ||
+            grid.Columns[e.ColumnIndex].DataPropertyName != nameof(XmlDifference.Apply) ||
+            grid.Rows[e.RowIndex].DataBoundItem is not XmlDifference selected) return;
+        m_bSynchronizingSelection = true;
+        try
+        {
+            var apply = selected.Apply && selected.Kind != XmlDifferenceKind.ExistsOnlyInCurrent;
+            foreach (var target in new[] { _grid, _existenceGrid })
+            {
+                if (target.DataSource is not List<XmlDifference> items) continue;
+                foreach (var item in items.Where(item => string.Equals(item.RelativeFilePath,
+                             selected.RelativeFilePath, StringComparison.OrdinalIgnoreCase))) item.Apply = apply;
+                target.Refresh();
+            }
+        }
+        finally { m_bSynchronizingSelection = false; }
     }
 
     private void ConfigureLogColumns()
@@ -215,15 +257,17 @@ public partial class HistoryControl : UserControlBase
 
         e.PaintBackground(e.CellBounds, true);
 
-        var segments = TextDiff.Compute(item.CurrentValue, item.BackupValue)
-            .Where(segment => segment.Kind == TextDiff.SegmentKind.Equal ||
+        // [Codex - 2026.10.19] 그리기에서는 이미 계산된 구간만 조회한다.
+        if (!m_oDiffSegments.TryGetValue(item, out var cached)) return;
+        var segments = cached.Where(segment => segment.Kind == TextDiff.SegmentKind.Equal ||
                                (isCurrentColumn && segment.Kind == TextDiff.SegmentKind.RemovedFromLeft) ||
                                (isBackupColumn && segment.Kind == TextDiff.SegmentKind.AddedInRight));
 
         var x = e.CellBounds.Left + 4;
         foreach (var segment in segments)
         {
-            var size = TextRenderer.MeasureText(e.Graphics, segment.Text, e.CellStyle.Font, e.CellBounds.Size, TextFormatFlags.NoPadding);
+            var displayText = segment.Text.Length > 2048 ? string.Format("{0}…", segment.Text[..2048]) : segment.Text;
+            var size = TextRenderer.MeasureText(e.Graphics, displayText, e.CellStyle.Font, e.CellBounds.Size, TextFormatFlags.NoPadding);
             var segmentBounds = new Rectangle(x, e.CellBounds.Top, size.Width, e.CellBounds.Height);
             if (segment.Kind != TextDiff.SegmentKind.Equal)
             {
@@ -239,7 +283,7 @@ public partial class HistoryControl : UserControlBase
                 TextDiff.SegmentKind.AddedInRight => ColorRGB.DiffAddedText,
                 _ => e.CellStyle.ForeColor
             };
-            TextRenderer.DrawText(e.Graphics, segment.Text, e.CellStyle.Font, segmentBounds, textColor,
+            TextRenderer.DrawText(e.Graphics, displayText, e.CellStyle.Font, segmentBounds, textColor,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             x += size.Width;
         }
@@ -305,12 +349,17 @@ public partial class HistoryControl : UserControlBase
         }
     }
 
-    private void RefreshBackupList()
+    private async void RefreshBackupList()
     {
+        var version = ++m_iCatalogVersion;
+        try
+        {
         if (m_oSettingsService is null || m_oCatalogService is null) return;
         ApplyCalendarSizing();
         var settings = m_oSettingsService.Load();
-        m_oAllRecords = m_oCatalogService.Refresh(settings.BackupRootPath).Values
+        var catalog = await m_oCatalogService.RefreshAsync(settings.BackupRootPath);
+        if (IsDisposed || Disposing || version != m_iCatalogVersion) return;
+        m_oAllRecords = catalog.Values
             .SelectMany(items => items)
             .OrderByDescending(item => item.CreatedAt)
             .ToList();
@@ -325,6 +374,9 @@ public partial class HistoryControl : UserControlBase
 
         SelectDate(_calendar.SelectedDate);
         UpdateCalendarSidebar(_calendar.DisplayedMonth);
+        }
+        catch (Exception exception)
+        { if (!IsDisposed && version == m_iCatalogVersion) SetSummaryStatus(string.Format("목록 조회 실패: {0}", exception.Message), false); }
     }
 
     /// <summary>
@@ -391,11 +443,16 @@ public partial class HistoryControl : UserControlBase
         try
         {
             var progress = new Progress<int>(value => _progress.Value = value);
-            var differences = await m_oComparisonService.CompareAsync(m_oSettingsService.Load(), sourceRecord, destinationRecord, progress, m_oCancellationTokenSource.Token);
+            var compareSettings = m_oSettingsService.Load().Snapshot();
+            var differences = await m_oComparisonService.CompareAsync(compareSettings, sourceRecord, destinationRecord, progress, m_oCancellationTokenSource.Token);
+            m_oComparedSettings = sourceIsCurrent ? compareSettings : null;
             // 성격이 다른 두 종류를 서로 다른 목록에 나눠 담는다 — "설정값 차이"(실제 값이 다름)는
             // _grid(빨강/노랑 강조), "존재 차이"(파일이 한쪽에만 있음)는 _existenceGrid(경로만).
             var valueChanges = differences.Where(item => item.Kind == XmlDifferenceKind.ValueChanged).ToList();
             var existenceDiffs = differences.Where(item => item.Kind != XmlDifferenceKind.ValueChanged).ToList();
+            m_oDiffSegments = await Task.Run(() => valueChanges.ToDictionary(item => item,
+                item => { m_oCancellationTokenSource.Token.ThrowIfCancellationRequested();
+                    return TextDiff.Compute(item.CurrentValue, item.BackupValue); }), m_oCancellationTokenSource.Token);
             _grid.DataSource = valueChanges;
             _existenceGrid.DataSource = existenceDiffs;
             _existenceHost.Visible = existenceDiffs.Count > 0;
@@ -414,6 +471,10 @@ public partial class HistoryControl : UserControlBase
         }
         catch (Exception exception)
         {
+            // [Codex - 2026.10.19] 이전 성공 결과로 손상 파일을 적용하지 못하도록 결과를 폐기한다.
+            _grid.DataSource = null;
+            _existenceGrid.DataSource = null;
+            _applyButton.Enabled = false;
             m_oLoggingService?.LogError("XML 비교 중 오류가 발생했습니다.", exception);
             MessageBox.Show(this, exception.Message, "비교 실패", MessageBoxButtons.OK, MessageBoxIcon.Error);
             SetSummaryStatus("비교 중 오류가 발생했습니다.", isSuccess: false);
@@ -436,7 +497,7 @@ public partial class HistoryControl : UserControlBase
     {
         var hasValueDifferences = _grid.DataSource is List<XmlDifference> items && items.Count > 0;
         var hasExistenceDifferences = _existenceGrid.DataSource is List<XmlDifference> existenceItems && existenceItems.Count > 0;
-        _applyButton.Enabled = (hasValueDifferences || hasExistenceDifferences) && _sourceIsCurrentCheckBox.Checked;
+        _applyButton.Enabled = !m_bIsBusy && m_oComparedSettings is not null && (hasValueDifferences || hasExistenceDifferences) && _sourceIsCurrentCheckBox.Checked;
     }
 
     /// <summary>ConfigureCompareColumns()가 고정 순서(적용/XML 파일/현재/백업)로 만든 열 헤더를
@@ -450,8 +511,17 @@ public partial class HistoryControl : UserControlBase
 
     private void UiChange_SourceIsCurrent(object? sender, EventArgs e)
     {
+        InvalidateComparison();
         _sourceCombo.Enabled = !_sourceIsCurrentCheckBox.Checked;
         UpdateApplyAvailability();
+    }
+
+    // [Codex - 2026.10.19] 비교 대상을 바꾼 후 이전 체크 결과를 재사용하지 않는다.
+    private void InvalidateComparison()
+    {
+        m_oComparedSettings = null;
+        m_oDiffSegments.Clear();
+        _applyButton.Enabled = false;
     }
 
     private async void UiClick_Apply(object? sender, EventArgs e)
@@ -459,6 +529,14 @@ public partial class HistoryControl : UserControlBase
         if (m_oSettingsService is null || m_oComparisonService is null || m_bIsBusy) return;
         if (!_sourceIsCurrentCheckBox.Checked)
             return; // Source가 현재가 아니면(백업끼리 비교) Apply는 의미가 없다 — 버튼도 비활성화되어 있다.
+        if (m_oComparedSettings is null || m_oRecoveryService is null || m_oBackupService is null) return;
+        var settings = m_oSettingsService.Load().Snapshot();
+        if (System.Text.Json.JsonSerializer.Serialize(settings) != System.Text.Json.JsonSerializer.Serialize(m_oComparedSettings))
+        {
+            InvalidateComparison();
+            MessageBox.Show(this, "비교 후 설정이 변경되었습니다. 다시 비교하세요.", "비교 필요");
+            return;
+        }
         _grid.EndEdit();
         _existenceGrid.EndEdit();
         // 설정값 차이/존재 차이 두 목록에서 체크한 항목을 합쳐서 한 번에 적용한다 — Apply 로직
@@ -476,7 +554,9 @@ public partial class HistoryControl : UserControlBase
 
         if (_backupCombo.SelectedItem is not BackupRecord record)
             return;
-        var confirm = MessageBox.Show(this, string.Format("선택한 XML 파일 {0}개를 백업본으로 교체할까요?", selected.Count),
+        var confirm = MessageBox.Show(this, string.Format("선택한 XML 파일 {0}개를 백업본으로 전체 교체합니다.\n선택하지 않은 값을 포함하여 해당 파일의 모든 값이 교체됩니다.\n\n{1}\n\n계속할까요?",
+                selected.Select(item => item.RelativeFilePath).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+                string.Join(Environment.NewLine, selected.Select(item => item.RelativeFilePath).Distinct(StringComparer.OrdinalIgnoreCase))),
             "부분 복원 확인", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
         if (confirm != DialogResult.Yes)
             return;
@@ -488,11 +568,10 @@ public partial class HistoryControl : UserControlBase
         try
         {
             var progress = new Progress<int>(value => _progress.Value = value);
-            var result = await m_oComparisonService.ApplySelectedAsync(m_oSettingsService.Load().GetSourceRoot(), record, selected, progress, m_oCancellationTokenSource.Token);
-            if (result.Succeeded)
-                m_oLoggingService?.LogInfo(string.Format("설정 적용: {0}", result.Message));
-            else
-                m_oLoggingService?.LogError(string.Format("설정 적용 실패: {0}", result.Message));
+            var result = await RestoreSafetyPrompt.RunAsync(this, settings, m_oRecoveryService, m_oBackupService, progress,
+                m_oCancellationTokenSource.Token, () => m_oComparisonService.ApplySelectedAsync(settings, record, selected, progress, m_oCancellationTokenSource.Token));
+            InvalidateComparison();
+            m_oLoggingService?.LogResult("XmlRestore", result);
             MessageBox.Show(this, result.Message, result.Succeeded ? "설정 적용" : "적용 실패", MessageBoxButtons.OK,
                 result.Succeeded ? MessageBoxIcon.Information : MessageBoxIcon.Error);
             SetSummaryStatus(result.Message.Replace(Environment.NewLine, "  "), isSuccess: result.Succeeded);
@@ -517,8 +596,22 @@ public partial class HistoryControl : UserControlBase
         if (_grid.DataSource is not List<XmlDifference> items || items.Count == 0)
             return;
         var next = !items.All(item => item.Apply);
-        foreach (var item in items) item.Apply = next;
+        foreach (var item in items) item.Apply = next && item.Kind != XmlDifferenceKind.ExistsOnlyInCurrent;
         _grid.Refresh();
+    }
+
+    // [Codex - 2026.10.19] 사용자가 선택한 위치에 작업 로그와 실행 환경을 내보낸다.
+    private void UiClick_ExportDiagnostics(object? sender, EventArgs e)
+    {
+        if (m_oLoggingService is null || m_bIsBusy) return;
+        using var dialog = new SaveFileDialog { Filter = "진단 ZIP (*.zip)|*.zip", FileName = string.Format("PC_BackUp_Diagnostics_{0:yyyyMMdd-HHmmss}.zip", DateTime.Now), OverwritePrompt = false };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            m_oLoggingService.ExportDiagnostics(dialog.FileName);
+            MessageBox.Show(this, "진단 파일을 저장했습니다.", "진단 내보내기");
+        }
+        catch (Exception exception) { MessageBox.Show(this, exception.Message, "진단 저장 실패"); }
     }
 
     private void ToggleLogView()
@@ -555,12 +648,18 @@ public partial class HistoryControl : UserControlBase
 
     private void SetBusy(bool busy)
     {
+        _backupCombo.Enabled = !busy;
+        _sourceCombo.Enabled = !busy && !_sourceIsCurrentCheckBox.Checked;
+        _sourceIsCurrentCheckBox.Enabled = !busy;
+        _calendar.Enabled = !busy;
+        _applyButton.Enabled = false;
         _compareButton.Enabled = !busy;
         _logViewButton.Enabled = !busy;
         _cancelButton.Visible = busy;
         // 복원 화면과 동일하게 막연한 진행 애니메이션 대신 실제 진행률(%)로 표시한다.
         _progress.Style = ProgressBarStyle.Blocks;
         _progress.Value = 0;
+        if (!busy) UpdateApplyAvailability();
     }
 
     /// <summary>하단 상태 표시줄(_summaryLabel)의 스타일을 상태에 맞게 바꾼다. "설정이 같습니다"

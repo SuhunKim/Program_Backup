@@ -20,6 +20,7 @@ public partial class SettingControl : UserControlBase
 	private LogManager? m_oLoggingService;
 	private readonly TextBox m_oProjectText = new();
 	private readonly TextBox m_oExecutableText = new();
+    private readonly TextBox m_oSourceRootText = new();
 	private readonly TextBox m_oBackupPathText = new();
 	private readonly FlowLayoutPanel m_oFolderRowsPanel = new();
 	private readonly List<SelectiveFolderRow> m_oFolderRows = new();
@@ -144,7 +145,7 @@ public partial class SettingControl : UserControlBase
 				: GetDefaultBrowseDirectory();
 
 		if (dialog.ShowDialog(this) == DialogResult.OK)
-			nameText.Text = Path.GetFileName(Path.TrimEndingDirectorySeparator(dialog.SelectedPath));
+            SetSelectedFolder(nameText, dialog.SelectedPath);
 	}
 
 	private void DropZone_DragEnter(object? sender, DragEventArgs e)
@@ -168,7 +169,7 @@ public partial class SettingControl : UserControlBase
 
 		var added = 0;
 		foreach (var folder in folders)
-			if (AddOrUpdateFolderName(Path.GetFileName(Path.TrimEndingDirectorySeparator(folder))))
+			if (AddSelectedFolder(folder))
 				added++;
 
 		m_oStatusLabel.Text = added > 0
@@ -229,6 +230,35 @@ public partial class SettingControl : UserControlBase
 			m_oStatusLabel.Text = string.Format("실행 파일 옆에서 폴더 {0}개를 찾아 자동으로 추가했습니다. 저장 버튼을 눌러 확정하세요.", added);
 	}
 
+    // [Codex - 2026.10.19] 선택한 경로의 실제 원본 상대 위치를 확인하고 저장한다.
+    private string? GetRelativeSelection(string selected)
+    {
+        if (string.IsNullOrWhiteSpace(m_oSourceRootText.Text)) return null;
+        var relative = Path.GetRelativePath(m_oSourceRootText.Text, selected);
+        return FileNaming.IsValidRelativeFolder(relative) ? relative : null;
+    }
+
+    private void SetSelectedFolder(TextBox field, string selected)
+    {
+        var relative = GetRelativeSelection(selected);
+        if (relative is null) MessageBox.Show(this, "원본 루트 아래의 폴더를 선택하세요.", "폴더 확인");
+        else field.Text = relative;
+    }
+
+    private bool AddSelectedFolder(string selected)
+    {
+        var relative = GetRelativeSelection(selected);
+        if (relative is null) { MessageBox.Show(this, "원본 루트 아래의 폴더만 추가할 수 있습니다.", "폴더 확인"); return false; }
+        return AddOrUpdateFolderName(relative);
+    }
+
+    private void UiClick_SourceRoot(object? sender, EventArgs e)
+    {
+        using var dialog = new FolderBrowserDialog { Description = "프로그램 원본 루트를 선택하세요.",
+            InitialDirectory = m_oSourceRootText.Text, UseDescriptionForTitle = true };
+        if (dialog.ShowDialog(this) == DialogResult.OK) m_oSourceRootText.Text = dialog.SelectedPath;
+    }
+
 	private const string PreferredBrowseRoot = @"D:\_program";
 	private const string FallbackBrowseRoot = @"D:\";
 
@@ -264,6 +294,10 @@ public partial class SettingControl : UserControlBase
 			return;
 
 		m_oExecutableText.Text = dialog.FileName;
+        // [Codex - 2026.10.19] EXE를 선택할 때만 후보 루트를 채우고 폴더 목록 변경 시 재추론하지 않는다.
+        var candidate = new AppSettings { ExecutablePath = dialog.FileName,
+            SelectiveFolderNames = m_oFolderRows.Select(row => row.NameText.Text.Trim()).ToList() };
+        m_oSourceRootText.Text = candidate.GetSourceRoot();
 		AutoDetectSiblingFolders(dialog.FileName);
 	}
 
@@ -286,6 +320,7 @@ public partial class SettingControl : UserControlBase
 		var settings = m_oSettingsService.Load();
 		m_oProjectText.Text = settings.TargetProjectName;
 		m_oExecutableText.Text = settings.ExecutablePath;
+        m_oSourceRootText.Text = settings.GetSourceRoot();
 		m_oBackupPathText.Text = settings.BackupRootPath;
 
 		ClearFolderRows();
@@ -312,6 +347,7 @@ public partial class SettingControl : UserControlBase
 		{
 			TargetProjectName = m_oProjectText.Text.Trim(),
 			ExecutablePath = m_oExecutableText.Text.Trim(),
+            SourceRootPath = m_oSourceRootText.Text.Trim(),
 			BackupRootPath = m_oBackupPathText.Text.Trim(),
 			SelectiveFolderNames = m_oFolderRows.Select(row => row.NameText.Text.Trim()).ToList(),
 			AutoBackupBeforeRestore = previousSettings.AutoBackupBeforeRestore,

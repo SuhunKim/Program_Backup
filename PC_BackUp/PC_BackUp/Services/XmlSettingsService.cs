@@ -12,7 +12,7 @@ public sealed class XmlSettingsService : ISettingsService
 
     public XmlSettingsService()
     {
-        SettingsFilePath = Path.Combine(ProgramPaths.FindOwnProgramRoot(), ConfigFolderName, SettingsFileName);
+        SettingsFilePath = Path.Combine(ProgramPaths.GetDataRoot(), ConfigFolderName, SettingsFileName);
     }
 
     public string SettingsFilePath { get; }
@@ -45,6 +45,8 @@ public sealed class XmlSettingsService : ISettingsService
             if (settings.SelectiveFolderNames.Count == 0)
                 settings.SelectiveFolderNames = new List<string>(DefaultSelectiveFolderNames);
 
+            // [Codex - 2026.10.19] 구버전의 추론 결과를 고정한다. 다음 저장부터 명시 경로가 영속화된다.
+            if (string.IsNullOrWhiteSpace(settings.SourceRootPath)) settings.SourceRootPath = settings.GetSourceRoot();
             return settings;
         }
         catch (Exception exception) when (exception is InvalidOperationException or XmlException)
@@ -56,11 +58,12 @@ public sealed class XmlSettingsService : ISettingsService
 
     public void Save(AppSettings settings)
     {
+        settings = settings.Snapshot();
         var configFolder = Path.GetDirectoryName(SettingsFilePath)
             ?? throw new InvalidOperationException("Config 폴더 경로를 확인할 수 없습니다.");
         Directory.CreateDirectory(configFolder);
 
-        var temporaryPath = string.Format("{0}.tmp", SettingsFilePath);
+        var temporaryPath = string.Format("{0}.{1}.tmp", SettingsFilePath, Guid.NewGuid().ToString("N"));
         try
         {
             var writerSettings = new XmlWriterSettings

@@ -20,6 +20,7 @@ public sealed class BackupService
         IProgress<int>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        settings = settings.Snapshot();
         var errors = settings.Validate();
         if (errors.Count > 0)
             return (OperationResult.Failure(string.Join(Environment.NewLine, errors)), null);
@@ -28,11 +29,14 @@ public sealed class BackupService
 
         try
         {
+            using var operation = OperationCoordinator.Acquire(settings.GetSourceRoot(), settings.BackupRootPath);
             var record = await Task.Run(() =>
             {
                 var sourceRoot = Path.GetFullPath(settings.GetSourceRoot());
                 var backupRoot = Path.GetFullPath(settings.BackupRootPath);
+                PathSafety.EnsureNoReparsePoints(backupRoot);
                 Directory.CreateDirectory(backupRoot);
+                PathSafety.EnsureNoReparsePoints(backupRoot);
 
                 var baseName = ResolveAvailableBaseName(backupRoot, kind, suffix);
                 var destination = Path.Combine(backupRoot, string.Format("{0}{1}", baseName, SuffixFor(kind)));
@@ -41,33 +45,58 @@ public sealed class BackupService
                 if (kind == BackupKind.SelectiveFolders)
                     EnsureSelectiveFoldersExist(sourceRoot, selectiveFolderNames);
 
-                var files = EnumerateSourceFiles(sourceRoot, backupRoot)
-                    .Where(file => kind == BackupKind.FullZip ||
-                                   IsConfiguredFolderItem(sourceRoot, file, selectiveFolderNames))
-                    .ToList();
+                var roots = kind == BackupKind.FullZip
+                    ? new[] { sourceRoot }
+                    : selectiveFolderNames.Select(name => Path.Combine(sourceRoot, name));
+                var files = roots.SelectMany(root => EnumerateSourceFiles(root, backupRoot)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
                 if (files.Count == 0)
                     throw new InvalidOperationException("백업 조건에 맞는 파일이 없습니다.");
 
-                if (kind == BackupKind.FullZip)
-                    CreateZip(sourceRoot, destination, files, progress, cancellationToken);
-                else
-                    CopyToFolder(sourceRoot, destination, files, progress, cancellationToken);
+                progress?.Report(0);
+                var manifest = BackupManifestService.Create(settings, kind, files, cancellationToken);
+                progress?.Report(5);
+                // [Codex - 2026.10.19] 완료되기 전에는 카탈로그에서 인식하지 않는 이름으로 작성한다.
+                var pending = Path.Combine(backupRoot, string.Format(".pcbackup-pending-{0}", Guid.NewGuid().ToString("N")));
+                try
+                {
+                    if (kind == BackupKind.FullZip)
+                        CreateZip(sourceRoot, pending, files, progress, cancellationToken);
+                    else
+                        CopyToFolder(sourceRoot, pending, files, progress, cancellationToken);
+                    progress?.Report(85);
+                    BackupManifestService.Write(pending, kind, manifest);
+                    BackupManifestService.Verify(pending, manifest, cancellationToken);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (kind == BackupKind.FullZip) File.Move(pending, destination);
+                    else Directory.Move(pending, destination);
+                    progress?.Report(100);
+                }
+                finally
+                {
+                    try
+                    {
+                        if (File.Exists(pending)) File.Delete(pending);
+                        if (Directory.Exists(pending)) Directory.Delete(pending, true);
+                    }
+                    catch { /* 완료본은 보존하고 미완성 잔여물은 카탈로그에서 제외한다. */ }
+                }
 
-                m_oCatalogService.Refresh(backupRoot);
-                return m_oCatalogService.GetAll().First(record =>
-                    string.Equals(record.FullPath, destination, StringComparison.OrdinalIgnoreCase));
+                // [Codex - 2026.10.19] 생성 성공을 별도 카탈로그 재탐색의 성공 여부와 분리한다.
+                return new BackupRecord { FullPath = destination, FileName = Path.GetFileName(destination),
+                    Kind = kind, CreatedAt = manifest.CreatedUtc.ToLocalTime(), Manifest = manifest,
+                    SizeBytes = kind == BackupKind.FullZip ? new FileInfo(destination).Length : manifest.Files.Sum(item => item.Length) };
             }, cancellationToken);
 
             return (OperationResult.Success(string.Format("백업이 완료되었습니다.\n{0}", record.FileName)), record);
         }
         catch (OperationCanceledException)
         {
-            return (OperationResult.Failure("백업이 취소되었습니다."), null);
+            return (OperationResult.Canceled("백업이 취소되었습니다."), null);
         }
         catch (Exception exception)
         {
-            return (OperationResult.Failure(string.Format("백업 중 오류가 발생했습니다.\n{0}", exception.Message)), null);
+            return (OperationResult.Failure(string.Format("백업 중 오류가 발생했습니다.\n{0}", exception.Message), exception), null);
         }
     }
 
@@ -113,20 +142,38 @@ public sealed class BackupService
         throw new InvalidOperationException("사용 가능한 백업 파일명을 찾지 못했습니다. 백업 폴더를 정리한 뒤 다시 시도하세요.");
     }
 
+    // [Codex - 2026.10.19] 접근 실패는 경로를 포함해 드러내고 저장소·링크는 내려가기 전에 제외한다.
     private static IEnumerable<string> EnumerateSourceFiles(string sourceRoot, string backupRoot)
     {
-        var options = new EnumerationOptions
+        PathSafety.EnsureNoReparsePoints(sourceRoot);
+        if ((File.GetAttributes(sourceRoot) & FileAttributes.ReparsePoint) != 0)
+            throw new IOException(string.Format("백업 원본이 연결 경로입니다: {0}", sourceRoot));
+        var pending = new Stack<string>();
+        pending.Push(sourceRoot);
+        while (pending.Count > 0)
         {
-            RecurseSubdirectories = true,
-            IgnoreInaccessible = true,
-            AttributesToSkip = FileAttributes.ReparsePoint
-        };
-
-        foreach (var file in Directory.EnumerateFiles(sourceRoot, "*", options))
-        {
-            var fullPath = Path.GetFullPath(file);
-            if (!IsSameOrChildPath(fullPath, backupRoot))
-                yield return fullPath;
+            var directory = pending.Pop();
+            string[] entries;
+            try { entries = Directory.GetFileSystemEntries(directory); }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                throw new IOException(string.Format("백업 항목을 읽지 못했습니다: {0}", directory), exception) { Data = { ["Path"] = directory } };
+            }
+            foreach (var entry in entries)
+            {
+                var fullPath = Path.GetFullPath(entry);
+                if (IsSameOrChildPath(fullPath, backupRoot)) continue;
+                FileAttributes attributes;
+                try { attributes = File.GetAttributes(fullPath); }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    throw new IOException(string.Format("백업 항목을 확인하지 못했습니다: {0}", fullPath), exception) { Data = { ["Path"] = fullPath } };
+                }
+                if ((attributes & FileAttributes.ReparsePoint) != 0)
+                    throw new IOException(string.Format("연결 경로는 완전 백업을 보장할 수 없습니다: {0}", fullPath));
+                if ((attributes & FileAttributes.Directory) != 0) pending.Push(fullPath);
+                else yield return fullPath;
+            }
         }
     }
 
@@ -159,6 +206,8 @@ public sealed class BackupService
     {
         using var stream = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create);
+        var totalBytes = files.Sum(file => new FileInfo(file).Length);
+        long processed = 0;
 
         try
         {
@@ -166,8 +215,13 @@ public sealed class BackupService
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var relativePath = Path.GetRelativePath(sourceRoot, files[index]);
-                archive.CreateEntryFromFile(files[index], relativePath, CompressionLevel.Optimal);
-                progress?.Report((index + 1) * 100 / files.Count);
+                using var input = File.OpenRead(files[index]);
+                using var output = archive.CreateEntry(relativePath, CompressionLevel.Optimal).Open();
+                FileTransfer.Copy(input, output, cancellationToken, count =>
+                {
+                    processed += count;
+                    progress?.Report(5 + (int)Math.Min(75, processed * 75d / Math.Max(1, totalBytes)));
+                });
             }
         }
         catch
@@ -187,6 +241,8 @@ public sealed class BackupService
         CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(destination);
+        var totalBytes = files.Sum(file => new FileInfo(file).Length);
+        long processed = 0;
         try
         {
             for (var index = 0; index < files.Count; index++)
@@ -195,8 +251,11 @@ public sealed class BackupService
                 var relativePath = Path.GetRelativePath(sourceRoot, files[index]);
                 var targetPath = Path.Combine(destination, relativePath);
                 Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
-                File.Copy(files[index], targetPath, true);
-                progress?.Report((index + 1) * 100 / files.Count);
+                FileTransfer.CopyFile(files[index], targetPath, cancellationToken, count =>
+                {
+                    processed += count;
+                    progress?.Report(5 + (int)Math.Min(75, processed * 75d / Math.Max(1, totalBytes)));
+                });
             }
         }
         catch

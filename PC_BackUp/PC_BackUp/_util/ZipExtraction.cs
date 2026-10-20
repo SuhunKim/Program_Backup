@@ -2,33 +2,55 @@ using System.IO.Compression;
 
 namespace PC_BackUp;
 
-/// <summary>
-/// .NET의 ZipFile.ExtractToDirectory는 .NET Core 2.1부터 zip-slip("..")을 내부적으로 막아주지만,
-/// 그건 프레임워크가 우연히 제공하는 보호일 뿐 우리 코드가 보장하는 방어는 아니다.
-/// 백업/복원처럼 신뢰 경계를 넘는 zip 해제에는 엔트리별 경로를 직접 검증해 명시적으로 방어한다.
-/// </summary>
+// [Codex - 2026.10.19] 경로·중복·용량·엔트리 수를 사전 검증하고 실제 해제 바이트도 제한한다.
 internal static class ZipExtraction
 {
-    public static void SafeExtractToDirectory(string zipPath, string destinationRoot)
+    internal const int MaximumEntries = 100_000;
+    internal const long MaximumBytes = 100L * 1024 * 1024 * 1024;
+    public static void SafeExtractToDirectory(string zipPath, string destinationRoot,
+        CancellationToken token = default, IProgress<int>? progress = null)
     {
-        var normalizedRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(destinationRoot));
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(destinationRoot));
+        PathSafety.EnsureNoReparsePoints(root);
         using var archive = ZipFile.OpenRead(zipPath);
+        if (archive.Entries.Count > MaximumEntries) throw new InvalidDataException("ZIP 항목 수 제한(100,000개)을 초과했습니다.");
+        var targets = new List<(ZipArchiveEntry Entry, string Path)>();
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        long total = 0;
         foreach (var entry in archive.Entries)
         {
-            var targetPath = Path.GetFullPath(Path.Combine(normalizedRoot, entry.FullName));
-            if (!targetPath.Equals(normalizedRoot, StringComparison.OrdinalIgnoreCase) &&
-                !targetPath.StartsWith(string.Format("{0}{1}", normalizedRoot, Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException(string.Format("백업 zip에 대상 폴더를 벗어나는 항목이 있습니다: {0}", entry.FullName));
-
-            // 디렉터리 엔트리(zip 안에서 이름이 '/' 또는 '\'로 끝나는 항목)는 폴더만 만들고 넘어간다.
-            if (entry.FullName.EndsWith('/') || entry.FullName.EndsWith('\\'))
-            {
-                Directory.CreateDirectory(targetPath);
-                continue;
-            }
-
-            Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
-            entry.ExtractToFile(targetPath, overwrite: true);
+            token.ThrowIfCancellationRequested();
+            var name = entry.FullName.Replace('\\', '/');
+            if (Path.IsPathRooted(name) || name.Contains(':') || name.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(part => part is "." or ".."))
+                throw new InvalidDataException("ZIP 항목의 상대 경로가 올바르지 않습니다.");
+            var target = Path.GetFullPath(Path.Combine(root, entry.FullName));
+            if (!target.StartsWith(string.Format("{0}{1}", root, Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase) || !names.Add(target))
+                throw new InvalidDataException("ZIP에 경로 이탈 또는 중복 항목이 있습니다.");
+            if (((entry.ExternalAttributes >> 16) & 0xF000) == 0xA000) throw new InvalidDataException("ZIP 연결 파일은 허용하지 않습니다.");
+            if (entry.Length > MaximumBytes - total) throw new InvalidDataException("ZIP 해제 크기 제한(100GiB)을 초과했습니다.");
+            total += entry.Length;
+            targets.Add((entry, target));
         }
+        var drive = new DriveInfo(Path.GetPathRoot(root)!);
+        if (drive.AvailableFreeSpace < total + 64L * 1024 * 1024) throw new IOException("ZIP 해제에 필요한 임시 디스크 공간이 부족합니다.");
+        long processed = 0;
+        foreach (var item in targets)
+        {
+            token.ThrowIfCancellationRequested();
+            if (item.Entry.FullName.EndsWith('/') || item.Entry.FullName.EndsWith('\\'))
+            { Directory.CreateDirectory(item.Path); continue; }
+            PathSafety.EnsureNoReparsePoints(item.Path);
+            Directory.CreateDirectory(Path.GetDirectoryName(item.Path)!);
+            PathSafety.EnsureNoReparsePoints(item.Path);
+            using var input = item.Entry.Open();
+            using var output = new FileStream(item.Path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            var length = FileTransfer.Copy(input, output, token, count =>
+            {
+                processed += count;
+                progress?.Report((int)Math.Min(100, processed * 100d / Math.Max(1, total)));
+            }, item.Entry.Length);
+            if (length != item.Entry.Length) throw new InvalidDataException("ZIP 해제 크기가 기록과 다릅니다.");
+        }
+        progress?.Report(100);
     }
 }

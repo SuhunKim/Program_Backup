@@ -1,108 +1,103 @@
+using System.IO.Compression;
 using System.Text;
+using System.Text.Json;
+using PC_BackUp.Services;
 
 namespace PC_BackUp;
 
-/// <summary>
-/// PC_BackUp 자신의 작업 로그(성공/실패)를 파일로 남기고 다시 읽어오는 역할.
-/// UI를 참조하지 않으며, 로그 쓰기/읽기 실패가 앱 동작에 영향을 주지 않도록 내부에서 예외를 삼킨다.
-/// </summary>
+// [Codex - 2026.10.19] 구조화 작업 결과·전체 예외와 기록 실패 상태를 보존하고 진단 ZIP을 내보낸다.
 public sealed class LogManager
 {
-    private const string LogFolderName = "Logs";
-    private const string LogFileName = "pcbackup.log";
-    // 로그 파일이 무한히 커지는 것을 막기 위한 상한 — 이 크기를 넘어서 쓰기 직전이면
-    // 오래된 줄부터 잘라내고 최근 줄만 남긴다(로테이션 파일을 따로 만들지 않는 단순한 방식).
-    private const long MaxLogFileSizeBytes = 5 * 1024 * 1024; // 5MB
-    private const int RetainedLinesAfterTrim = 5000;
-    private readonly string m_sLogFilePath;
-
-    public LogManager()
+    private static readonly object m_oWriteLock = new();
+    private static string m_sLastWriteError = string.Empty;
+    private readonly string m_sDirectory;
+    public static string LastWriteError => Volatile.Read(ref m_sLastWriteError);
+    private sealed class Event
     {
-        string programRoot;
-        try
-        {
-            programRoot = ProgramPaths.FindOwnProgramRoot();
-        }
-        catch
-        {
-            programRoot = AppContext.BaseDirectory;
-        }
-
-        m_sLogFilePath = Path.Combine(programRoot, "Config", LogFolderName, LogFileName);
+        public Event() { }
+        public DateTime TimestampUtc { get; set; } = DateTime.UtcNow;
+        public string OperationId { get; set; } = Guid.NewGuid().ToString("N");
+        public string Operation { get; set; } = string.Empty;
+        public string Level { get; set; } = "INFO";
+        public string Status { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public string? Exception { get; set; }
+        public IReadOnlyList<OperationFileError> Errors { get; set; } = Array.Empty<OperationFileError>();
     }
 
-    public void LogInfo(string message) => Write("INFO", message);
+    public LogManager() => m_sDirectory = Path.Combine(ProgramPaths.GetDataRoot(), "Config", "Logs");
+    public void LogInfo(string message) => Write(new Event { Message = message });
+    public void LogError(string message, Exception? exception = null) => Write(new Event { Level = "ERROR", Message = message, Exception = exception?.ToString() });
+    public void LogResult(string operation, OperationResult result) => Write(new Event { Operation = operation, OperationId = result.OperationId,
+        Status = result.Status.ToString(), Message = result.Message, Errors = result.Errors,
+        Level = result.Status == OperationStatus.Failed ? "ERROR" : result.Status == OperationStatus.PartialSuccess ? "WARN" : "INFO" });
 
-    public void LogError(string message, Exception? exception = null) =>
-        Write("ERROR", exception is null ? message : string.Format("{0} — {1}", message, exception.Message));
+    private void Write(Event entry)
+    {
+        try
+        {
+            lock (m_oWriteLock)
+            {
+                Directory.CreateDirectory(m_sDirectory);
+                using var gate = new FileStream(Path.Combine(m_sDirectory, "write.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+                var file = Path.Combine(m_sDirectory, "pcbackup.jsonl");
+                if (File.Exists(file) && new FileInfo(file).Length > 5 * 1024 * 1024)
+                    File.Move(file, Path.Combine(m_sDirectory, "pcbackup.1.jsonl"), true);
+                File.AppendAllText(file, string.Format("{0}{1}", JsonSerializer.Serialize(entry), Environment.NewLine), new UTF8Encoding(false));
+                Volatile.Write(ref m_sLastWriteError, string.Empty);
+            }
+        }
+        catch (Exception exception) { Volatile.Write(ref m_sLastWriteError, exception.Message); }
+    }
 
     public IReadOnlyList<LogEntry> ReadRecent(int maxCount = 300)
     {
+        var entries = new List<LogEntry>();
         try
         {
-            if (!File.Exists(m_sLogFilePath))
-                return Array.Empty<LogEntry>();
-
-            var entries = new List<LogEntry>();
-            foreach (var line in File.ReadAllLines(m_sLogFilePath, Encoding.UTF8))
+            if (!Directory.Exists(m_sDirectory)) return entries;
+            foreach (var file in Directory.EnumerateFiles(m_sDirectory, "*.jsonl"))
             {
-                var parts = line.Split('\t', 3);
-                if (parts.Length != 3)
-                    continue;
-                if (!DateTime.TryParse(parts[0], out var timestamp))
-                    continue;
-
-                entries.Add(new LogEntry { Timestamp = timestamp, Level = parts[1], Message = parts[2] });
+                foreach (var line in File.ReadLines(file, Encoding.UTF8))
+                {
+                    try
+                    {
+                        var entry = JsonSerializer.Deserialize<Event>(line);
+                        if (entry is null) continue;
+                        entries.Add(new LogEntry { Timestamp = entry.TimestampUtc.ToLocalTime(), Level = entry.Level,
+                            Message = string.Format("[{0}] {1} {2}", entry.OperationId, entry.Status, entry.Message) });
+                    }
+                    catch (JsonException) { /* 불완전한 마지막 줄은 진단 원본에 보존한다. */ }
+                }
             }
-
-            entries.Reverse();
-            return entries.Take(maxCount).ToList();
+            var legacy = Path.Combine(m_sDirectory, "pcbackup.log");
+            if (File.Exists(legacy))
+            {
+                foreach (var line in File.ReadLines(legacy, Encoding.UTF8))
+                {
+                    var parts = line.Split('\t', 3);
+                    if (parts.Length == 3 && DateTime.TryParse(parts[0], out var time))
+                        entries.Add(new LogEntry { Timestamp = time, Level = parts[1], Message = parts[2] });
+                }
+            }
         }
-        catch
-        {
-            return Array.Empty<LogEntry>();
-        }
+        catch (Exception exception) { Volatile.Write(ref m_sLastWriteError, string.Format("로그 조회 실패: {0}", exception.Message)); }
+        return entries.OrderByDescending(entry => entry.Timestamp).Take(Math.Max(0, maxCount)).ToList();
     }
 
-    private void Write(string level, string message)
+    public void ExportDiagnostics(string destination)
     {
-        try
+        lock (m_oWriteLock)
         {
-            var directory = Path.GetDirectoryName(m_sLogFilePath);
-            if (!string.IsNullOrEmpty(directory))
-                Directory.CreateDirectory(directory);
-
-            TrimIfTooLarge();
-
-            var sanitized = message.Replace("\r\n", " ").Replace('\n', ' ').Replace('\t', ' ');
-            var line = string.Format("{0:yyyy-MM-dd HH:mm:ss}\t{1}\t{2}{3}", DateTime.Now, level, sanitized, Environment.NewLine);
-            File.AppendAllText(m_sLogFilePath, line, Encoding.UTF8);
+            var sources = Directory.Exists(m_sDirectory) ? Directory.GetFiles(m_sDirectory)
+                .Where(file => file.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase) || file.EndsWith(".log", StringComparison.OrdinalIgnoreCase)).ToList() : new List<string>();
+            if (sources.Any(file => string.Equals(Path.GetFullPath(file), Path.GetFullPath(destination), StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException("진단 파일은 로그 원본과 다른 경로로 저장하세요.");
+            using var archive = ZipFile.Open(destination, ZipArchiveMode.Create);
+            foreach (var source in sources) archive.CreateEntryFromFile(source, Path.GetFileName(source));
+            using var writer = new StreamWriter(archive.CreateEntry("runtime.txt").Open(), Encoding.UTF8);
+            writer.WriteLine(string.Format("UTC: {0:o}\nOS: {1}\nRuntime: {2}\nDataRoot: {3}\nLastLogError: {4}", DateTime.UtcNow,
+                Environment.OSVersion, Environment.Version, ProgramPaths.GetDataRoot(), LastWriteError));
         }
-        catch
-        {
-            // 로깅 실패가 앱 동작에 영향을 주면 안 되므로 조용히 무시한다.
-        }
-    }
-
-    /// <summary>
-    /// 로그 파일이 상한(<see cref="MaxLogFileSizeBytes"/>)을 넘으면 가장 최근
-    /// <see cref="RetainedLinesAfterTrim"/>줄만 남기고 앞부분을 잘라낸다. 별도 로테이션
-    /// 파일(.1, .2 …)을 만들지 않는 단순한 방식이라, 과거 로그 전체가 필요한 감사 용도에는
-    /// 맞지 않지만 이 도구의 "최근 이력 확인" 용도에는 충분하다.
-    /// </summary>
-    private void TrimIfTooLarge()
-    {
-        if (!File.Exists(m_sLogFilePath))
-            return;
-        if (new FileInfo(m_sLogFilePath).Length <= MaxLogFileSizeBytes)
-            return;
-
-        var recentLines = File.ReadAllLines(m_sLogFilePath, Encoding.UTF8)
-            .TakeLast(RetainedLinesAfterTrim)
-            .ToList();
-
-        var temporaryPath = string.Format("{0}.tmp", m_sLogFilePath);
-        File.WriteAllLines(temporaryPath, recentLines, Encoding.UTF8);
-        File.Move(temporaryPath, m_sLogFilePath, true);
     }
 }

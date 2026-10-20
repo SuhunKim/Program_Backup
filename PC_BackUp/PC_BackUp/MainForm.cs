@@ -10,6 +10,14 @@ public partial class MainForm : Form
     public MainForm()
     {
         InitializeComponent();
+        // [Codex - 2026.10.19] 적용·정리 중 정상 종료로 작업이 끊기는 것을 막는다.
+        FormClosing += (_, e) =>
+        {
+            if (!OperationCoordinator.HasActiveOperations) return;
+            e.Cancel = true;
+            MessageBox.Show(this, "진행 중인 작업을 완료하거나 취소한 뒤 종료하세요.", "작업 진행 중",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        };
 
         if (System.ComponentModel.LicenseManager.UsageMode !=
             System.ComponentModel.LicenseUsageMode.Designtime)
@@ -20,6 +28,7 @@ public partial class MainForm : Form
 
     private void Initialize()
     {
+        RestoreTransaction.RecoverPending();
         var settingsService = new XmlSettingsService();
         var catalogService = new BackupCatalogService();
         var backupService = new BackupService(catalogService);
@@ -41,7 +50,7 @@ public partial class MainForm : Form
         m_oMenuManager.Register(MainMenuId.Backup, new BackupControl(settingsService, backupService, loggingService));
         m_oMenuManager.Register(MainMenuId.Recovery, recoveryControl);
         m_oMenuManager.Register(MainMenuId.History,
-            new HistoryControl(settingsService, catalogService, xmlComparisonService, loggingService));
+            new HistoryControl(settingsService, catalogService, xmlComparisonService, loggingService, recoveryService, backupService));
         m_oMenuManager.Register(MainMenuId.Settings, new SettingControl(settingsService, loggingService));
 
         m_oMenuManager.Select(MainMenuId.Dashboard);

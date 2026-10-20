@@ -25,6 +25,7 @@ partial class HistoryControl
     private readonly Panel _sourceRow = new();
     private readonly Panel _destinationRow = new();
     private readonly ComboBox _backupCombo = new();
+    private readonly StyledButton _exportDiagnosticsButton = new();
     private readonly Label _backupComboLabel = new();
     private readonly CheckBox _sourceIsCurrentCheckBox = new();
     private readonly ComboBox _sourceCombo = new();
@@ -309,6 +310,13 @@ partial class HistoryControl
         // 
         // bottomBar
         // 
+        // [Codex - 2026.10.19] 기존 하단 작업 영역에 진단 내보내기를 배치한다.
+        _exportDiagnosticsButton.Text = "진단 내보내기";
+        _exportDiagnosticsButton.Dock = DockStyle.Right;
+        _exportDiagnosticsButton.Width = 120;
+        _exportDiagnosticsButton.ButtonType = StyledButtonType.Secondary;
+        _exportDiagnosticsButton.Click += UiClick_ExportDiagnostics;
+        bottomBar.Controls.Add(_exportDiagnosticsButton);
         bottomBar.Controls.Add(_cancelButton);
         bottomBar.Controls.Add(_applyButton);
         _summaryLabel.Dock = DockStyle.Fill;

@@ -20,6 +20,8 @@ public sealed class XmlComparisonService
     {
         try
         {
+            settings = settings.Snapshot();
+            using var operation = OperationCoordinator.Acquire(settings.GetSourceRoot(), settings.BackupRootPath);
             return await CompareCoreAsync(settings, sourceRecord, destinationRecord, progress, cancellationToken);
         }
         catch (OperationCanceledException)
@@ -38,9 +40,10 @@ public sealed class XmlComparisonService
         return await Task.Run(() =>
         {
             var selectiveFolderNames = settings.GetSelectiveFolderNames();
+            var fingerprints = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var sourceDocuments = FilterToSelectiveFolders(
                 sourceRecord is null
-                    ? ReadCurrentXml(settings.GetSourceRoot(), settings.BackupRootPath, cancellationToken)
+                    ? ReadCurrentXml(settings.GetSourceRoot(), settings.BackupRootPath, cancellationToken, fingerprints)
                     : ReadBackupXml(sourceRecord, cancellationToken),
                 selectiveFolderNames);
             var destinationDocuments = FilterToSelectiveFolders(ReadBackupXml(destinationRecord, cancellationToken), selectiveFolderNames);
@@ -76,8 +79,17 @@ public sealed class XmlComparisonService
                 // 양쪽 다 파일이 있으면 실제로 어느 설정 항목(XmlPath)이 어떤 값에서 어떤 값으로
                 // 다른지 필드 단위로 전부 나열한다 — 예전에는 "파일 전체가 다름" 한 줄만 만들고
                 // 실제 값은 버렸는데, 그러면 그리드에서 뭐가 다른지 전혀 알 수 없었다.
-                var sourceValues = FlattenXml(sourceXml, cancellationToken);
-                var destinationValues = FlattenXml(destinationXml, cancellationToken);
+                Dictionary<string, string> sourceValues;
+                Dictionary<string, string> destinationValues;
+                try
+                {
+                    sourceValues = FlattenXml(sourceXml, cancellationToken);
+                    destinationValues = FlattenXml(destinationXml, cancellationToken);
+                }
+                catch (Exception exception) when (exception is XmlException or InvalidDataException)
+                {
+                    throw new InvalidDataException(string.Format("XML 비교 불가: {0}\n{1}", relativePath, exception.Message), exception);
+                }
                 foreach (var xmlPath in sourceValues.Keys.Union(destinationValues.Keys, StringComparer.Ordinal))
                 {
                     var hasSourceValue = sourceValues.TryGetValue(xmlPath, out var sourceValue);
@@ -98,6 +110,14 @@ public sealed class XmlComparisonService
                 progress?.Report((index + 1) * 100 / Math.Max(1, relativePaths.Count));
             }
 
+            if (sourceRecord is null)
+            {
+                foreach (var item in differences)
+                {
+                    item.ExpectedCurrentHash = fingerprints.TryGetValue(item.RelativeFilePath, out var hash) ? hash : "(missing)";
+                    item.ExpectedBackupTextHash = destinationDocuments.TryGetValue(item.RelativeFilePath, out var text) ? HashText(text) : null;
+                }
+            }
             // 존재 차이(구조적)는 실제 설정값이 달라진 항목보다 뒤로 보낸다 — 화면에서는 어차피
             // 별도 목록으로 분리해서 보여주지만, Apply 같은 순서 의존 로직을 위해서도 값 차이를
             // 먼저 정렬해 두는 편이 낫다.
@@ -115,64 +135,88 @@ public sealed class XmlComparisonService
     /// 파일에 쓰므로, 백업끼리 비교한 결과에 대해서는 호출자(HistoryControl)가 애초에 적용 버튼을
     /// 비활성화해서 호출 자체를 막는다.
     /// </summary>
-    public async Task<OperationResult> ApplySelectedAsync(
-        string currentRoot,
-        BackupRecord destinationRecord,
-        IEnumerable<XmlDifference> selected,
-        IProgress<int>? progress = null,
-        CancellationToken cancellationToken = default)
+    // [Codex - 2026.10.19] 비교 시점 해시를 재확인하고 원본 바이트를 공통 트랜잭션으로 복원한다.
+    public async Task<OperationResult> ApplySelectedAsync(AppSettings settings, BackupRecord destinationRecord,
+        IEnumerable<XmlDifference> selected, IProgress<int>? progress = null, CancellationToken cancellationToken = default)
     {
+        var stage = Path.Combine(Path.GetTempPath(), "PC_BackUp", Guid.NewGuid().ToString("N"));
         try
         {
-            var items = selected.ToList();
-            if (items.Count == 0)
-                return OperationResult.Failure("적용할 항목을 선택하세요.");
-
+            settings = settings.Snapshot();
+            var currentRoot = settings.GetSourceRoot();
+            using var operation = OperationCoordinator.Acquire(currentRoot, settings.BackupRootPath);
+            var items = selected.Where(item => item.Kind != XmlDifferenceKind.ExistsOnlyInCurrent)
+                .DistinctBy(item => item.RelativeFilePath, StringComparer.OrdinalIgnoreCase).ToList();
+            if (items.Count == 0) return OperationResult.Failure("복원할 파일을 선택하세요.");
             return await Task.Run(() =>
             {
-                var backupDocuments = ReadBackupXml(destinationRecord, cancellationToken);
-                var applied = 0;
-                var skipped = 0;
-                var groups = items.GroupBy(item => item.RelativeFilePath, StringComparer.OrdinalIgnoreCase).ToList();
-                for (var index = 0; index < groups.Count; index++)
+                BackupManifestService.ValidateForRestore(destinationRecord, settings, cancellationToken);
+                Directory.CreateDirectory(stage);
+                var sources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var item in items)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var group = groups[index];
-                    var filePath = Path.GetFullPath(Path.Combine(currentRoot, group.Key));
-                    EnsureChildPath(filePath, currentRoot);
-                    if (!backupDocuments.TryGetValue(group.Key, out var backupXml))
-                    {
-                        skipped += group.Count();
-                        progress?.Report((index + 1) * 100 / Math.Max(1, groups.Count));
-                        continue;
-                    }
-                    var temporaryPath = string.Format("{0}.pcbackup.tmp", filePath);
-                    Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
-                    File.WriteAllText(temporaryPath, backupXml, Encoding.UTF8);
-                    File.Move(temporaryPath, filePath, true);
-                    applied++;
-                    progress?.Report((index + 1) * 100 / Math.Max(1, groups.Count));
+                    var bytes = ReadBackupBytes(destinationRecord, item.RelativeFilePath);
+                    using var reader = new StreamReader(new MemoryStream(bytes), Encoding.UTF8, true);
+                    var xml = reader.ReadToEnd();
+                    LoadXml(xml);
+                    if (item.ExpectedBackupTextHash is null || HashText(xml) != item.ExpectedBackupTextHash)
+                        throw new InvalidDataException("비교 후 백업 파일이 변경되었습니다. 다시 비교하세요.");
+                    var stagedFile = Path.Combine(stage, sources.Count.ToString());
+                    File.WriteAllBytes(stagedFile, bytes);
+                    sources.Add(item.RelativeFilePath, stagedFile);
                 }
-
-                return OperationResult.Success(skipped > 0
-                    ? string.Format("선택 설정 적용 완료: {0}개 (적용 불가 {1}개)", applied, skipped)
-                    : string.Format("선택 설정 적용 완료: {0}개", applied));
+                void ValidateCurrent()
+                {
+                    foreach (var item in items)
+                    {
+                        var target = Path.GetFullPath(Path.Combine(currentRoot, item.RelativeFilePath));
+                        EnsureChildPath(target, currentRoot);
+                        var hash = "(missing)";
+                        if (File.Exists(target))
+                        {
+                            using var stream = File.OpenRead(target);
+                            hash = BackupManifestService.Hash(stream, cancellationToken);
+                        }
+                        if (item.ExpectedCurrentHash is null || hash != item.ExpectedCurrentHash)
+                            throw new InvalidDataException(string.Format("비교 후 현재 파일이 변경되었습니다: {0}. 다시 비교하세요.", item.RelativeFilePath));
+                    }
+                }
+                ValidateCurrent();
+                RestoreTransaction.Apply(sources, currentRoot, progress, cancellationToken, ValidateCurrent);
+                return OperationResult.Success(string.Format("XML 파일 전체 복원 완료: {0}개", sources.Count));
             }, cancellationToken);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) { return OperationResult.Canceled("파일 복원이 취소되었습니다."); }
+        catch (Exception exception) { return OperationResult.Failure(string.Format("파일 복원 실패: {0}", exception.Message), exception); }
+        finally { try { if (Directory.Exists(stage)) Directory.Delete(stage, true); } catch { } }
+    }
+
+    private static string HashText(string value) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+
+    private static byte[] ReadBackupBytes(BackupRecord record, string relative)
+    {
+        if (Directory.Exists(record.FullPath))
         {
-            return OperationResult.Failure("적용이 취소되었습니다.");
+            var file = Path.GetFullPath(Path.Combine(record.FullPath, relative));
+            EnsureChildPath(file, record.FullPath);
+            if (new FileInfo(file).Length > 8 * 1024 * 1024) throw new InvalidDataException("XML 크기 제한을 초과했습니다.");
+            return File.ReadAllBytes(file);
         }
-        catch (Exception exception)
-        {
-            return OperationResult.Failure(string.Format("설정 적용 중 오류가 발생했습니다.\n{0}", exception.Message));
-        }
+        using var archive = ZipFile.OpenRead(record.FullPath);
+        var entry = archive.Entries.SingleOrDefault(entry => string.Equals(BackupManifestService.Normalize(entry.FullName),
+            BackupManifestService.Normalize(relative), StringComparison.OrdinalIgnoreCase)) ?? throw new FileNotFoundException(relative);
+        if (entry.Length > 8 * 1024 * 1024) throw new InvalidDataException("XML 크기 제한을 초과했습니다.");
+        using var input = entry.Open();
+        using var output = new MemoryStream();
+        input.CopyTo(output);
+        return output.ToArray();
     }
 
     private static Dictionary<string, string> ReadCurrentXml(
         string sourceRoot,
         string backupRoot,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, Dictionary<string, string> fingerprints)
     {
         var documents = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (!Directory.Exists(sourceRoot))
@@ -184,7 +228,7 @@ public sealed class XmlComparisonService
         var options = new EnumerationOptions
         {
             RecurseSubdirectories = true,
-            IgnoreInaccessible = true,
+            IgnoreInaccessible = false,
             AttributesToSkip = FileAttributes.ReparsePoint
         };
 
@@ -197,7 +241,12 @@ public sealed class XmlComparisonService
                  fullPath.StartsWith(string.Format("{0}{1}", normalizedBackupRoot, Path.DirectorySeparatorChar),
                      StringComparison.OrdinalIgnoreCase)))
                 continue;
-            documents[Path.GetRelativePath(sourceRoot, file)] = File.ReadAllText(file);
+            if (new FileInfo(file).Length > 8 * 1024 * 1024) throw new InvalidDataException(string.Format("XML 크기 제한 초과: {0}", file));
+            var bytes = File.ReadAllBytes(file);
+            var relative = Path.GetRelativePath(sourceRoot, file);
+            fingerprints[relative] = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
+            using var reader = new StreamReader(new MemoryStream(bytes), Encoding.UTF8, true);
+            documents[relative] = reader.ReadToEnd();
         }
         return documents;
     }
@@ -208,7 +257,7 @@ public sealed class XmlComparisonService
         if (Directory.Exists(record.FullPath))
         {
             // 구버전 선별 백업(폴더 복사 방식)은 폴더 그대로 읽는다.
-            foreach (var file in Directory.EnumerateFiles(record.FullPath, "*.xml", SearchOption.AllDirectories))
+            foreach (var file in PathSafety.EnumerateFiles(record.FullPath).Where(file => file.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 documents[Path.GetRelativePath(record.FullPath, file)] = File.ReadAllText(file);
@@ -246,7 +295,7 @@ public sealed class XmlComparisonService
     {
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
         if (string.IsNullOrWhiteSpace(xml))
-            return values;
+            throw new InvalidDataException("XML 문서가 비어 있습니다.");
 
         try
         {
@@ -256,7 +305,8 @@ public sealed class XmlComparisonService
         }
         catch (XmlException)
         {
-            // 손상된 XML은 비교 목록에서 제외하고 서비스 호출 자체는 계속 진행한다.
+            // [Codex - 2026.10.19] 손상은 동일함이 아니므로 파일 수준 비교 실패를 호출자에 전달한다.
+            throw;
         }
         return values;
     }
@@ -269,6 +319,7 @@ public sealed class XmlComparisonService
         while ((count = reader.Read(buffer, 0, buffer.Length)) > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (builder.Length > 8 * 1024 * 1024 - count) throw new InvalidDataException("XML 텍스트 크기 제한을 초과했습니다.");
             builder.Append(buffer, 0, count);
         }
         return builder.ToString();
@@ -282,13 +333,15 @@ public sealed class XmlComparisonService
     /// 큰 XML을 처리하는 도중에도 취소가 바로 먹히게 한다.
     /// </summary>
     private static void VisitElement(XmlElement element, int sameNameIndex, string parentPath,
-        IDictionary<string, string> values, CancellationToken cancellationToken)
+        IDictionary<string, string> values, CancellationToken cancellationToken, int depth = 0)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var path = string.Format("{0}/*[local-name()='{1}'][{2}]", parentPath, element.LocalName, sameNameIndex);
+        // [Codex - 2026.10.19] namespace URI를 포함하여 동명 노드·속성의 충돌을 막는다.
+        if (depth > 256) throw new InvalidDataException("XML 중첩 깊이 제한을 초과했습니다.");
+        var path = string.Format("{0}/{{{1}}}{2}[{3}]", parentPath, element.NamespaceURI, element.LocalName, sameNameIndex);
         foreach (XmlAttribute attribute in element.Attributes)
-            values[string.Format("{0}/@*[local-name()='{1}']", path, attribute.LocalName)] = attribute.Value;
+            values[string.Format("{0}/@{{{1}}}{2}", path, attribute.NamespaceURI, attribute.LocalName)] = attribute.Value;
 
         var childElements = element.ChildNodes.OfType<XmlElement>().ToList();
         if (childElements.Count == 0)
@@ -297,25 +350,34 @@ public sealed class XmlComparisonService
             return;
         }
 
+        var directText = string.Concat(element.ChildNodes.OfType<XmlNode>()
+            .Where(node => node is XmlText or XmlCDataSection).Select(node => node.Value));
+        if (!string.IsNullOrWhiteSpace(directText)) values[string.Format("{0}/text()", path)] = directText;
         var nameCounts = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var child in childElements)
         {
-            nameCounts.TryGetValue(child.LocalName, out var count);
+            var name = string.Format("{{{0}}}{1}", child.NamespaceURI, child.LocalName);
+            nameCounts.TryGetValue(name, out var count);
             count++;
-            nameCounts[child.LocalName] = count;
-            VisitElement(child, count, path, values, cancellationToken);
+            nameCounts[name] = count;
+            VisitElement(child, count, path, values, cancellationToken, depth + 1);
         }
     }
 
     private static XmlDocument LoadXml(string xml)
     {
+        var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null,
+            MaxCharactersInDocument = 8 * 1024 * 1024 };
+        using var input = new StringReader(xml);
+        using var reader = XmlReader.Create(input, settings);
         var document = new XmlDocument { XmlResolver = null };
-        document.LoadXml(xml);
+        document.Load(reader);
         return document;
     }
 
     private static void EnsureChildPath(string candidate, string parent)
     {
+        PathSafety.EnsureNoReparsePoints(candidate);
         var normalizedParent = Path.TrimEndingDirectorySeparator(Path.GetFullPath(parent));
         if (!candidate.StartsWith(string.Format("{0}{1}", normalizedParent, Path.DirectorySeparatorChar),
                 StringComparison.OrdinalIgnoreCase))
