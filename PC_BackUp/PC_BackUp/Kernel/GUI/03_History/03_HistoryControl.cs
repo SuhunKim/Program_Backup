@@ -345,7 +345,7 @@ public partial class HistoryControl : UserControlBase
                 {
                     Tag = date, AutoSize = false,
                     Size = new Size(_calendar.Width - SystemInformation.VerticalScrollBarWidth - 4, 56 * DeviceDpi / 96),
-                    FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
+                    FlatStyle = FlatStyle.Flat, TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
                     Padding = new Padding(8, 0, 8, 0), Margin = new Padding(0, 0, 0, 8),
                     Font = _calendar.Font, Cursor = Cursors.Hand, UseVisualStyleBackColor = false
                 };

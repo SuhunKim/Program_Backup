@@ -29,6 +29,8 @@ internal sealed class HistoryCalendar : Control
 
     public override Size GetPreferredSize(Size proposedSize) => new(240, HeaderHeight + WeekdayHeight + RowHeight * 6 + 8);
 
+    // [Codex - 2026.10.28] 실행 중 선택 상태는 디자이너 코드로 직렬화하지 않는다.
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public DateTime SelectedDate
     {
         get => m_oSelectedDate;
