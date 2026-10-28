@@ -58,6 +58,54 @@ internal static class ColorRGB
     public static readonly Color DiffAddedBackground = Color.FromArgb(253, 235, 180);
     public static readonly Color DiffAddedText = Color.FromArgb(120, 84, 6);
 
+    // [Codex - 2026.10.28] 빈 상태 안내가 표 헤더를 가리지 않도록 데이터 영역에만 배치한다.
+    public static void ConfigureGridEmptyState(DataGridView grid, Label label)
+    {
+        label.Dock = DockStyle.None;
+        label.BringToFront();
+        void UpdateBounds()
+        {
+            var headerHeight = grid.ColumnHeadersVisible ? grid.ColumnHeadersHeight : 0;
+            label.Bounds = new Rectangle(grid.Left, grid.Top + headerHeight,
+                grid.Width, Math.Max(0, grid.Height - headerHeight));
+        }
+        grid.SizeChanged += (_, _) => UpdateBounds();
+        grid.LocationChanged += (_, _) => UpdateBounds();
+        grid.ColumnHeadersHeightChanged += (_, _) => UpdateBounds();
+        UpdateBounds();
+    }
+    // [Codex - 2026.10.28] 복원 목록과 이력 비교/로그 표의 헤더·행·선택 스타일을 통일한다.
+    public static void ApplyDataGridStyle(DataGridView grid)
+    {
+        grid.BackgroundColor = Surface;
+        grid.BorderStyle = BorderStyle.None;
+        grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
+        grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
+        grid.GridColor = Border;
+        grid.RowHeadersVisible = false;
+        grid.AllowUserToResizeRows = false;
+        grid.EnableHeadersVisualStyles = false;
+        grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+        grid.ColumnHeadersHeight = 40;
+        grid.RowTemplate.Height = 36;
+        grid.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
+        {
+            BackColor = GridHeaderBackground, ForeColor = Text,
+            SelectionBackColor = GridHeaderBackground, SelectionForeColor = Text,
+            Font = new Font("맑은 고딕", 9F, FontStyle.Bold),
+            Alignment = DataGridViewContentAlignment.MiddleLeft,
+            Padding = new Padding(8, 0, 8, 0)
+        };
+        grid.DefaultCellStyle = new DataGridViewCellStyle
+        {
+            BackColor = Surface, ForeColor = Text,
+            SelectionBackColor = SidebarActive, SelectionForeColor = Text,
+            Font = new Font("맑은 고딕", 9F),
+            Padding = new Padding(8, 0, 8, 0)
+        };
+        grid.AlternatingRowsDefaultCellStyle.BackColor = DetailPanelBackground;
+    }
+
     /// <summary>
     /// 아이콘 배지 + 캡션 + 값으로 이뤄진 요약 카드(예: "선택된 백업 날짜 · 2026년 8월 20일").
     /// caption/value 라벨은 호출한 쪽에서 만들어 전달하므로, 나중에 값이 바뀌면 그 참조로 갈아 끼우면 된다.

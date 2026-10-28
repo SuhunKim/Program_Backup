@@ -8,19 +8,19 @@ partial class RecoveryControl
     // 디자이너에서도 그대로 열어서 확인할 수 있게 한다. 아래 두 가지는 예외로 코드에만 남긴다:
     //  1) 상단 요약 카드의 원형 아이콘(IconGlyphs) — GDI+로 직접 그리는 Paint 이벤트라 디자이너가
     //     표현할 수 없다. RecoveryControl() 생성자에서 InitializeComponent() 이후에 붙인다.
-    //  2) MonthCalendar의 실제 크기(ApplyCalendarSizing) — DPI에 따라 화면에 실제로 표시된 뒤에만
+    //  2) 공용 달력의 실제 크기(ApplyCalendarSizing) — 화면에 표시된 뒤
     //     정확히 잴 수 있어서 RefreshCatalog()에서 매번 다시 계산한다.
     private Panel headerPanel = null!;
     private Label headerTitleLabel = null!;
     private Label headerDescriptionLabel = null!;
     private CardPanel workspace = null!;
+    private TableLayoutPanel m_oWorkspaceLayout = null!;
     private Label calendarTitle = null!;
     private Panel detailsPanel = null!;
     private CardPanel selectedBackupCardPanel = null!;
-    private Panel detailsGap = null!;
     private Panel actionPanel = null!;
 
-    private readonly MonthCalendar _calendar = new();
+    private readonly HistoryCalendar _calendar = new();
     private readonly DataGridView _grid = new();
     private readonly Label _dateLabel = new();
     private readonly Label _emptyLabel = new();
@@ -60,11 +60,11 @@ partial class RecoveryControl
         headerDescriptionLabel = new Label();
         headerTitleLabel = new Label();
         workspace = new CardPanel();
+        m_oWorkspaceLayout = new TableLayoutPanel();
         _workspaceSplit = new SplitContainer();
         calendarTitle = new Label();
         detailsPanel = new Panel();
         selectedBackupCardPanel = new CardPanel();
-        detailsGap = new Panel();
         actionPanel = new Panel();
         _cancelButton = new StyledButton();
         _restoreButton = new StyledButton();
@@ -83,6 +83,7 @@ partial class RecoveryControl
         headerPanel.Controls.Add(headerTitleLabel);
         headerPanel.Location = new Point(20, 16);
         headerPanel.Name = "headerPanel";
+        headerPanel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         headerPanel.Padding = new Padding(8, 2, 0, 0);
         headerPanel.Size = new Size(960, 62);
         headerPanel.TabIndex = 2;
@@ -114,9 +115,6 @@ partial class RecoveryControl
         // workspace
         // 
         workspace.BackColor = Color.White;
-        workspace.Controls.Add(_workspaceSplit);
-        workspace.Controls.Add(actionPanel);
-        workspace.Controls.Add(detailsPanel);
         // [Codex - 2026.09.21] 상단 요약 카드와 본문이 겹치지 않도록 본문 영역을 도킹한다.
         workspace.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         workspace.Location = new Point(0, 100);
@@ -124,6 +122,21 @@ partial class RecoveryControl
         workspace.Padding = new Padding(16);
         workspace.Size = new Size(1000, 574);
         workspace.TabIndex = 0;
+        // [Codex - 2026.10.28] 요약/본문/작업 영역을 별도 행으로 배치해 도킹 순서에 의한 겹침을 없앤다.
+        m_oWorkspaceLayout.Dock = DockStyle.Fill;
+        m_oWorkspaceLayout.ColumnCount = 1;
+        m_oWorkspaceLayout.RowCount = 3;
+        m_oWorkspaceLayout.Margin = Padding.Empty;
+        m_oWorkspaceLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        m_oWorkspaceLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        m_oWorkspaceLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        m_oWorkspaceLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
+        _workspaceSplit.Margin = Padding.Empty;
+        actionPanel.Margin = Padding.Empty;
+        actionPanel.Dock = DockStyle.Fill;
+        m_oWorkspaceLayout.Controls.Add(_workspaceSplit, 0, 1);
+        m_oWorkspaceLayout.Controls.Add(actionPanel, 0, 2);
+        workspace.Controls.Add(m_oWorkspaceLayout);
         // 
         // _workspaceSplit
         // 
@@ -137,11 +150,11 @@ partial class RecoveryControl
         // _workspaceSplit.Panel1
         // 
         _workspaceSplit.Panel1.BackColor = Color.White;
+        _workspaceSplit.Panel1.AutoScroll = true;
         _workspaceSplit.Panel1.Controls.Add(_calendar);
         _workspaceSplit.Panel1.Controls.Add(calendarTitle);
         _calendar.Location = new Point(CalendarLeftMargin, CalendarTitleHeight);
-        _calendar.MaxSelectionCount = 1;
-        _calendar.ShowTodayCircle = true;
+        _calendar.AccessibleName = "복원 백업 날짜";
         // 
         // _workspaceSplit.Panel2
         // 
@@ -161,7 +174,7 @@ partial class RecoveryControl
         calendarTitle.ForeColor = Color.FromArgb(28, 32, 41);
         calendarTitle.Location = new Point(0, 0);
         calendarTitle.Name = "calendarTitle";
-        calendarTitle.Size = new Size(121, 23);
+        calendarTitle.Size = new Size(121, CalendarTitleHeight);
         calendarTitle.TabIndex = 0;
         calendarTitle.Text = "백업 날짜";
         // [Codex - 2026.09.21] 이슈 6 레이아웃 변경에서 누락된 백업 목록 컨트롤을 복원한다.
@@ -174,25 +187,12 @@ partial class RecoveryControl
         _emptyLabel.ForeColor = ColorRGB.MutedText;
         _emptyLabel.TextAlign = ContentAlignment.MiddleCenter;
         _grid.Dock = DockStyle.Fill;
-        _grid.BackgroundColor = ColorRGB.Surface;
-        _grid.BorderStyle = BorderStyle.None;
-        _grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-        _grid.GridColor = ColorRGB.Border;
-        _grid.RowHeadersVisible = false;
+        ColorRGB.ApplyDataGridStyle(_grid);
+        _grid.AutoGenerateColumns = false;
         _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = false;
-        _grid.AllowUserToResizeRows = false;
-        _grid.AutoGenerateColumns = false;
         _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _grid.MultiSelect = false;
-        _grid.RowTemplate.Height = 36;
-        _grid.ColumnHeadersHeight = 40;
-        _grid.ColumnHeadersDefaultCellStyle.BackColor = ColorRGB.GridHeaderBackground;
-        _grid.ColumnHeadersDefaultCellStyle.ForeColor = ColorRGB.Text;
-        _grid.ColumnHeadersDefaultCellStyle.Font = new Font("맑은 고딕", 9F, FontStyle.Bold);
-        _grid.EnableHeadersVisualStyles = false;
-        _grid.DefaultCellStyle.SelectionBackColor = ColorRGB.SidebarActive;
-        _grid.DefaultCellStyle.SelectionForeColor = ColorRGB.Text;
         _grid.ReadOnly = true;
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "시간", DataPropertyName = nameof(BackupRecord.TimeText), Width = 100 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "백업 형태", DataPropertyName = nameof(BackupRecord.KindText), Width = 130 });
@@ -202,10 +202,13 @@ partial class RecoveryControl
         // detailsPanel
         // 
         detailsPanel.Controls.Add(selectedBackupCardPanel);
-        detailsPanel.Controls.Add(detailsGap);
+        // [Codex - 2026.10.28] 선택 백업 상세를 목록 아래에 도킹해 본문과 겹치지 않게 한다.
+        _workspaceSplit.Panel2.Controls.Add(detailsPanel);
+        detailsPanel.Dock = DockStyle.Bottom;
+        detailsPanel.Padding = new Padding(0, 12, 0, 0);
         detailsPanel.Location = new Point(20, 317);
         detailsPanel.Name = "detailsPanel";
-        detailsPanel.Size = new Size(968, 174);
+        detailsPanel.Size = new Size(968, 240);
         detailsPanel.TabIndex = 1;
         // 
         // selectedBackupCardPanel
@@ -215,6 +218,9 @@ partial class RecoveryControl
         selectedBackupCardPanel.Location = new Point(0, 0);
         selectedBackupCardPanel.Name = "selectedBackupCardPanel";
         selectedBackupCardPanel.Padding = new Padding(16, 10, 16, 10);
+        _selectedBackupLabel.AutoEllipsis = true;
+        _selectedBackupMetaLabel.AutoEllipsis = true;
+        _restoreTargetLabel.AutoEllipsis = true;
         selectedBackupCardPanel.Size = new Size(952, 174);
         selectedBackupCardPanel.TabIndex = 0;
         _selectedBackupLabel.Dock = DockStyle.Top;
@@ -246,28 +252,20 @@ partial class RecoveryControl
         _compareBeforeRestoreCheckBox.Text = "복원 전 현재 파일과 비교";
         _compareBeforeRestoreCheckBox.ForeColor = ColorRGB.Text;
         _compareBeforeRestoreCheckBox.CheckedChanged += UiChange_CompareBeforeRestore;
+        selectedBackupCardPanel.Controls.Add(_comparisonListBox);
         selectedBackupCardPanel.Controls.Add(_autoSafetyBackupCheckBox);
         selectedBackupCardPanel.Controls.Add(_compareBeforeRestoreCheckBox);
-        selectedBackupCardPanel.Controls.Add(_comparisonListBox);
         selectedBackupCardPanel.Controls.Add(_comparisonResultLabel);
         selectedBackupCardPanel.Controls.Add(_restoreTargetLabel);
         selectedBackupCardPanel.Controls.Add(_selectedBackupMetaLabel);
         selectedBackupCardPanel.Controls.Add(_selectedBackupLabel);
-        // 
-        // detailsGap
-        // 
-        detailsGap.Dock = DockStyle.Right;
-        detailsGap.Location = new Point(952, 0);
-        detailsGap.Name = "detailsGap";
-        detailsGap.Size = new Size(16, 174);
-        detailsGap.TabIndex = 1;
         // 
         // actionPanel
         // 
         actionPanel.Controls.Add(_cancelButton);
         actionPanel.Controls.Add(_restoreButton);
         actionPanel.Controls.Add(_progress);
-        actionPanel.Dock = DockStyle.Bottom;
+        actionPanel.Dock = DockStyle.Fill;
         actionPanel.Location = new Point(20, 497);
         actionPanel.Name = "actionPanel";
         actionPanel.Padding = new Padding(0, 12, 0, 0);
