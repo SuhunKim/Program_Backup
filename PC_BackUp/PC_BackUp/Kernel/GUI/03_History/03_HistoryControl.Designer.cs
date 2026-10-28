@@ -59,6 +59,8 @@ partial class HistoryControl
 
     private const int CalendarTitleHeight = 36;
     private const int CalendarLeftMargin = 6;
+    private const int RecentCardHeight = 48;
+    private const int RecentCardGap = 6;
 
     private void InitializeComponent()
     {
@@ -178,7 +180,7 @@ partial class HistoryControl
         _calendarRecentTitle.ForeColor = ColorRGB.Text;
         _calendarRecentPanel.FlowDirection = FlowDirection.TopDown;
         _calendarRecentPanel.WrapContents = false;
-        _calendarRecentPanel.AutoScroll = true;
+        _calendarRecentPanel.AutoScroll = false; // 넘치면 왼쪽 패널 전체 스크롤로 본다
         _calendarRecentPanel.Padding = new Padding(0, 2, 0, 0); // 맨 위 카드의 윗 테두리가 잘리지 않게 한다
         // 
         // _workspaceSplit.Panel2
