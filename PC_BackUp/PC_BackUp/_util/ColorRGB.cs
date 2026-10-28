@@ -28,6 +28,10 @@ internal static class ColorRGB
     public const int CardRadius = 10;
     public const int ButtonRadius = 8;
 
+    // [Codex - 2026.10.28] 대시보드 빠른 작업과 이력 관리가 따르는 작업 버튼 높이와 컨트롤 간격.
+    public const int ActionButtonHeight = 42;
+    public const int ControlGap = 8;
+
     // 보조(Secondary) 버튼류에 쓰는 옅은 블루 틴트 — 이전에는 각 화면에서 개별적으로
     // 하드코딩돼 있던 값들을 여기 하나로 모았다.
     public static readonly Color SecondaryBackground = Color.FromArgb(233, 238, 245);

@@ -670,6 +670,8 @@ public partial class HistoryControl : UserControlBase
             _logViewButton.Text = "작업 로그";
         }
 
+        // [Codex - 2026.10.28] 로그 보기에서는 입력 행 전체를 접어 버튼 행 위에 빈 공간을 남기지 않는다.
+        backupSelectorPanel.Visible = !m_bIsLogView;
         _backupComboLabel.Visible = !m_bIsLogView;
         _backupCombo.Visible = !m_bIsLogView;
         _sourceComboLabel.Visible = !m_bIsLogView;

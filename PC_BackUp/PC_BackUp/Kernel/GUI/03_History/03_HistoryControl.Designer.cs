@@ -18,10 +18,11 @@ partial class HistoryControl
     private TableLayoutPanel m_oWorkspaceLayout = null!;
     private Label calendarTitle = null!;
     private Panel gridHost = null!;
-    private Panel selectionBar = null!;
+    private TableLayoutPanel selectionBar = null!;
     private Panel backupSelectorPanel = null!;
-    private Panel bottomBar = null!;
-    private Panel selectionBarActionSpacer = null!;
+    private TableLayoutPanel bottomBar = null!;
+    private FlowLayoutPanel m_oSelectionActions = null!;
+    private FlowLayoutPanel m_oBottomActions = null!;
 
     private readonly Panel _sourceRow = new();
     private readonly Panel _destinationRow = new();
@@ -69,12 +70,13 @@ partial class HistoryControl
         _workspaceSplit = new SplitContainer();
         calendarTitle = new Label();
         gridHost = new Panel();
-        selectionBar = new Panel();
+        selectionBar = new TableLayoutPanel();
         backupSelectorPanel = new Panel();
         _logViewButton = new StyledButton();
-        selectionBarActionSpacer = new Panel();
+        m_oSelectionActions = new FlowLayoutPanel();
+        m_oBottomActions = new FlowLayoutPanel();
         _compareButton = new StyledButton();
-        bottomBar = new Panel();
+        bottomBar = new TableLayoutPanel();
         _cancelButton = new StyledButton();
         _applyButton = new StyledButton();
         headerPanel.SuspendLayout();
@@ -140,7 +142,7 @@ partial class HistoryControl
         m_oWorkspaceLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         m_oWorkspaceLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         m_oWorkspaceLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        m_oWorkspaceLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
+        m_oWorkspaceLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         _workspaceSplit.Margin = Padding.Empty;
         bottomBar.Margin = Padding.Empty;
         bottomBar.Dock = DockStyle.Fill;
@@ -243,34 +245,40 @@ partial class HistoryControl
         gridHost.Controls.Add(_existenceHost);
         // 
         // selectionBar
-        // 
-        selectionBar.BackColor = Color.White;
-        selectionBar.Controls.Add(backupSelectorPanel);
-        selectionBar.Controls.Add(_logViewButton);
-        selectionBar.Controls.Add(selectionBarActionSpacer);
-        selectionBar.Controls.Add(_compareButton);
+        //
+        // [Codex - 2026.10.28] 입력 행과 작업 버튼 행을 분리해 작은 창에서도 서로 공간을 침범하지 않는다.
+        selectionBar.BackColor = ColorRGB.Surface;
         selectionBar.Dock = DockStyle.Top;
-        selectionBar.Location = new Point(0, 0);
         selectionBar.Name = "selectionBar";
+        selectionBar.AutoSize = true;
+        selectionBar.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        selectionBar.ColumnCount = 1;
+        selectionBar.RowCount = 2;
+        selectionBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        selectionBar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        selectionBar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         selectionBar.Padding = new Padding(0, 0, 0, 12);
-        selectionBar.Size = new Size(835, 84);
         selectionBar.TabIndex = 1;
-        // 
+        selectionBar.Controls.Add(backupSelectorPanel, 0, 0);
+        selectionBar.Controls.Add(m_oSelectionActions, 0, 1);
+        //
         // backupSelectorPanel
-        // 
+        //
         backupSelectorPanel.Dock = DockStyle.Fill;
-        backupSelectorPanel.Location = new Point(18, 8);
+        backupSelectorPanel.Margin = Padding.Empty;
         backupSelectorPanel.Name = "backupSelectorPanel";
-        backupSelectorPanel.Size = new Size(617, 68);
+        backupSelectorPanel.Size = new Size(617, 64);
         backupSelectorPanel.TabIndex = 0;
         _sourceRow.Dock = DockStyle.Top;
-        _sourceRow.Height = 30;
+        _sourceRow.Height = 36;
+        _sourceRow.Padding = new Padding(0, 0, 0, ColorRGB.ControlGap);
         _sourceComboLabel.Dock = DockStyle.Left;
         _sourceComboLabel.Width = 62;
         _sourceComboLabel.Text = "Source :";
         _sourceComboLabel.TextAlign = ContentAlignment.MiddleLeft;
         _sourceIsCurrentCheckBox.Dock = DockStyle.Left;
-        _sourceIsCurrentCheckBox.Width = 150;
+        _sourceIsCurrentCheckBox.Width = 158;
+        _sourceIsCurrentCheckBox.Padding = new Padding(0, 0, ColorRGB.ControlGap, 0);
         _sourceIsCurrentCheckBox.Text = "현재 적용된 파일 기준";
         _sourceIsCurrentCheckBox.Checked = true;
         _sourceIsCurrentCheckBox.CheckedChanged += UiChange_SourceIsCurrent;
@@ -281,7 +289,7 @@ partial class HistoryControl
         _sourceRow.Controls.Add(_sourceIsCurrentCheckBox);
         _sourceRow.Controls.Add(_sourceComboLabel);
         _destinationRow.Dock = DockStyle.Top;
-        _destinationRow.Height = 30;
+        _destinationRow.Height = 28;
         _backupComboLabel.Dock = DockStyle.Left;
         _backupComboLabel.Width = 62;
         _backupComboLabel.Text = "Dest :";
@@ -292,100 +300,118 @@ partial class HistoryControl
         _destinationRow.Controls.Add(_backupComboLabel);
         backupSelectorPanel.Controls.Add(_destinationRow);
         backupSelectorPanel.Controls.Add(_sourceRow);
-        // 
-        // _logViewButton
-        // 
-        _logViewButton.BackColor = Color.White;
-        _logViewButton.BorderThickness = 1;
-        _logViewButton.ButtonType = StyledButtonType.Secondary;
-        _logViewButton.Dock = DockStyle.Right;
-        _logViewButton.Font = new Font("맑은 고딕", 9F);
-        _logViewButton.ForeColor = Color.FromArgb(28, 32, 41);
-        _logViewButton.Location = new Point(635, 8);
-        _logViewButton.Margin = new Padding(8, 0, 0, 0);
-        _logViewButton.Name = "_logViewButton";
-        _logViewButton.Size = new Size(84, 68);
-        _logViewButton.TabIndex = 1;
-        _logViewButton.Text = "작업 로그";
-        // 
-        // selectionBarActionSpacer
-        // 
-        selectionBarActionSpacer.Dock = DockStyle.Right;
-        selectionBarActionSpacer.Location = new Point(719, 8);
-        selectionBarActionSpacer.Name = "selectionBarActionSpacer";
-        selectionBarActionSpacer.Size = new Size(8, 68);
-        selectionBarActionSpacer.TabIndex = 2;
-        // 
+        //
+        // m_oSelectionActions
+        //
+        m_oSelectionActions.Name = "m_oSelectionActions";
+        m_oSelectionActions.Dock = DockStyle.Fill;
+        m_oSelectionActions.AutoSize = true;
+        m_oSelectionActions.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        m_oSelectionActions.FlowDirection = FlowDirection.RightToLeft;
+        m_oSelectionActions.WrapContents = false;
+        m_oSelectionActions.Margin = new Padding(0, ColorRGB.ControlGap, 0, 0);
+        m_oSelectionActions.TabIndex = 1;
+        m_oSelectionActions.Controls.Add(_compareButton);
+        m_oSelectionActions.Controls.Add(_logViewButton);
+        //
         // _compareButton
-        // 
-        _compareButton.BackColor = Color.FromArgb(30, 100, 199);
-        _compareButton.Dock = DockStyle.Right;
-        _compareButton.Font = new Font("맑은 고딕", 10F, FontStyle.Bold);
-        _compareButton.ForeColor = Color.White;
-        _compareButton.Location = new Point(727, 8);
+        //
+        _compareButton.ButtonType = StyledButtonType.Primary;
+        _compareButton.Dock = DockStyle.None;
+        _compareButton.Margin = new Padding(ColorRGB.ControlGap, 0, 0, 0);
         _compareButton.Name = "_compareButton";
-        _compareButton.Size = new Size(90, 68);
-        _compareButton.TabIndex = 3;
+        _compareButton.Size = new Size(112, ColorRGB.ActionButtonHeight);
+        _compareButton.TabIndex = 1;
         _compareButton.Text = "XML 비교";
         _compareButton.Click += UiClick_Compare;
-        // 
+        //
+        // _logViewButton
+        //
+        _logViewButton.ButtonType = StyledButtonType.Secondary;
+        _logViewButton.Dock = DockStyle.None;
+        _logViewButton.Margin = new Padding(ColorRGB.ControlGap, 0, 0, 0);
+        _logViewButton.Name = "_logViewButton";
+        _logViewButton.Size = new Size(112, ColorRGB.ActionButtonHeight);
+        _logViewButton.TabIndex = 0;
+        _logViewButton.Text = "작업 로그";
+        //
         // bottomBar
-        // 
-        // [Codex - 2026.10.19] 기존 하단 작업 영역에 진단 내보내기를 배치한다.
-        _exportDiagnosticsButton.Text = "진단 내보내기";
-        _exportDiagnosticsButton.Dock = DockStyle.Right;
-        _exportDiagnosticsButton.Width = 120;
-        _exportDiagnosticsButton.ButtonType = StyledButtonType.Secondary;
-        _exportDiagnosticsButton.Click += UiClick_ExportDiagnostics;
-        bottomBar.Controls.Add(_exportDiagnosticsButton);
-        bottomBar.Controls.Add(_cancelButton);
-        bottomBar.Controls.Add(_applyButton);
+        //
+        // [Codex - 2026.10.28] 상태 문구와 작업 버튼도 별도 행으로 배치하고 실제 간격은 FlowLayoutPanel이 적용한다.
+        bottomBar.Dock = DockStyle.Fill;
+        bottomBar.Name = "bottomBar";
+        bottomBar.AutoSize = true;
+        bottomBar.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        bottomBar.ColumnCount = 1;
+        bottomBar.RowCount = 3;
+        bottomBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        bottomBar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        bottomBar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        bottomBar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        bottomBar.Padding = new Padding(0, 12, 0, 0);
+        bottomBar.TabIndex = 1;
+        _progress.Dock = DockStyle.Fill;
+        _progress.Height = 6;
+        _progress.Margin = new Padding(0, 0, 0, ColorRGB.ControlGap);
         _summaryLabel.Dock = DockStyle.Fill;
+        _summaryLabel.Height = 20;
+        _summaryLabel.Margin = new Padding(0, 0, 0, ColorRGB.ControlGap);
         _summaryLabel.Text = "백업을 선택하고 XML 비교를 실행하세요.";
         _summaryLabel.TextAlign = ContentAlignment.MiddleLeft;
+        _summaryLabel.AutoEllipsis = true;
         _summaryLabel.ForeColor = ColorRGB.MutedText;
-        _progress.Dock = DockStyle.Top;
-        _progress.Height = 6;
-        bottomBar.Controls.Add(_summaryLabel);
-        bottomBar.Controls.Add(_progress);
-        bottomBar.Controls.SetChildIndex(_summaryLabel, 0);
-        bottomBar.Dock = DockStyle.Fill;
-        bottomBar.Location = new Point(20, 497);
-        bottomBar.Name = "bottomBar";
-        bottomBar.Padding = new Padding(0, 12, 0, 0);
-        bottomBar.Size = new Size(960, 66);
-        bottomBar.TabIndex = 1;
-        // 
+        bottomBar.Controls.Add(_progress, 0, 0);
+        bottomBar.Controls.Add(_summaryLabel, 0, 1);
+        bottomBar.Controls.Add(m_oBottomActions, 0, 2);
+        //
+        // m_oBottomActions
+        //
+        m_oBottomActions.Name = "m_oBottomActions";
+        m_oBottomActions.Dock = DockStyle.Fill;
+        m_oBottomActions.AutoSize = true;
+        m_oBottomActions.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        m_oBottomActions.FlowDirection = FlowDirection.RightToLeft;
+        m_oBottomActions.WrapContents = false;
+        m_oBottomActions.Margin = Padding.Empty;
+        m_oBottomActions.TabIndex = 0;
+        m_oBottomActions.Controls.Add(_applyButton);
+        m_oBottomActions.Controls.Add(_cancelButton);
+        m_oBottomActions.Controls.Add(_exportDiagnosticsButton);
+        //
+        // _applyButton
+        //
+        _applyButton.ButtonType = StyledButtonType.Primary;
+        _applyButton.Dock = DockStyle.None;
+        _applyButton.Margin = new Padding(ColorRGB.ControlGap, 0, 0, 0);
+        _applyButton.Enabled = false;
+        _applyButton.Name = "_applyButton";
+        _applyButton.Size = new Size(176, ColorRGB.ActionButtonHeight);
+        _applyButton.TabIndex = 2;
+        _applyButton.Text = "선택 파일 전체 복원";
+        _applyButton.Click += UiClick_Apply;
+        //
         // _cancelButton
-        // 
-        _cancelButton.BackColor = Color.FromArgb(233, 238, 245);
-        _cancelButton.BorderThickness = 1;
+        //
         _cancelButton.ButtonType = StyledButtonType.Secondary;
-        _cancelButton.Dock = DockStyle.Right;
-        _cancelButton.Font = new Font("맑은 고딕", 9F);
-        _cancelButton.ForeColor = Color.FromArgb(28, 32, 41);
-        _cancelButton.Location = new Point(700, 12);
-        _cancelButton.Margin = new Padding(0, 0, 10, 0);
+        _cancelButton.Dock = DockStyle.None;
+        _cancelButton.Margin = new Padding(ColorRGB.ControlGap, 0, 0, 0);
         _cancelButton.Name = "_cancelButton";
-        _cancelButton.Size = new Size(100, 54);
-        _cancelButton.TabIndex = 0;
+        _cancelButton.Size = new Size(96, ColorRGB.ActionButtonHeight);
+        _cancelButton.TabIndex = 1;
         _cancelButton.Text = "취소";
         _cancelButton.Visible = false;
-        // 
-        // _applyButton
-        // 
-        _applyButton.BackColor = Color.FromArgb(30, 100, 199);
-        _applyButton.Dock = DockStyle.Right;
-        _applyButton.Enabled = false;
-        _applyButton.Font = new Font("맑은 고딕", 10F, FontStyle.Bold);
-        _applyButton.ForeColor = Color.White;
-        _applyButton.Location = new Point(800, 12);
-        _applyButton.Name = "_applyButton";
-        _applyButton.Size = new Size(160, 54);
-        _applyButton.TabIndex = 1;
-        _applyButton.Text = "선택 설정 적용";
-        _applyButton.Click += UiClick_Apply;
-        // 
+        //
+        // _exportDiagnosticsButton
+        //
+        _exportDiagnosticsButton.ButtonType = StyledButtonType.Secondary;
+        _exportDiagnosticsButton.Dock = DockStyle.None;
+        _exportDiagnosticsButton.Margin = new Padding(ColorRGB.ControlGap, 0, 0, 0);
+        _exportDiagnosticsButton.Name = "_exportDiagnosticsButton";
+        _exportDiagnosticsButton.Size = new Size(112, ColorRGB.ActionButtonHeight);
+        _exportDiagnosticsButton.TabIndex = 0;
+        _exportDiagnosticsButton.Text = "진단 내보내기";
+        _exportDiagnosticsButton.Click += UiClick_ExportDiagnostics;
+        //
         // HistoryControl
         // 
         Controls.Add(workspace);
