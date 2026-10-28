@@ -179,6 +179,7 @@ partial class HistoryControl
         _calendarRecentPanel.FlowDirection = FlowDirection.TopDown;
         _calendarRecentPanel.WrapContents = false;
         _calendarRecentPanel.AutoScroll = true;
+        _calendarRecentPanel.Padding = new Padding(0, 2, 0, 0); // 맨 위 카드의 윗 테두리가 잘리지 않게 한다
         // 
         // _workspaceSplit.Panel2
         // 

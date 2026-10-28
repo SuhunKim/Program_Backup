@@ -312,8 +312,9 @@ public partial class HistoryControl : UserControlBase
         _calendarRecentTitle.Location = new Point(_calendar.Left, contentTop + 26);
         _calendarRecentTitle.Size = new Size(_calendar.Width, 18);
         _calendarRecentPanel.Location = new Point(_calendar.Left, contentTop + 46);
-        // [Codex - 2026.10.28] 작은 창에서는 날짜 영역을 스크롤해 최근 이력 다섯 건까지 접근한다.
-        _calendarRecentPanel.Size = new Size(_calendar.Width, 320 * DeviceDpi / 96);
+        // 최근 이력은 다섯 건을 두되, 스크롤하지 않았을 때는 맨 위 카드 1건만 잘림 없이 보이게
+        // 높이를 맞춘다(위 여백 2 + 카드 56 + 카드 아래 여백 8). 나머지는 이 목록 안에서 스크롤한다.
+        _calendarRecentPanel.Size = new Size(_calendar.Width, 66 * DeviceDpi / 96);
     }
 
     /// <summary>

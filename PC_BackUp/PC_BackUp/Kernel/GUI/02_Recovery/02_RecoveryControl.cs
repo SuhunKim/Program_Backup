@@ -130,9 +130,10 @@ public partial class RecoveryControl : UserControlBase
 		var bodyLabel = new Label
 		{
 			Dock = DockStyle.Fill,
-			Text = "•  복원을 시작하면 선택한 백업으로 현재 데이터를 덮어씁니다.\r\n" +
-							 "•  복원 중에는 다른 프로그램을 종료해 주세요.\r\n" +
-							 "•  복원 완료 후 프로그램을 재시작해야 할 수 있습니다.",
+			// 달력 아래 좁은 칸에서 스크롤 없이 보이도록 한 줄씩 짧게 쓴다.
+			Text = "•  선택한 백업으로 덮어씁니다.\r\n" +
+							 "•  복원 전 프로그램을 종료하세요.\r\n" +
+							 "•  필요 시 복원 후 재시작하세요.",
 			Font = new Font("맑은 고딕", 8.5F),
 			ForeColor = ColorRGB.SafetyText
 		};
@@ -147,8 +148,8 @@ public partial class RecoveryControl : UserControlBase
 	{
 		_workspaceSplit.Panel1.AutoScrollPosition = Point.Empty;
         _calendar.Size = _calendar.PreferredSize;
-        m_oSafetyInfoCard.Location = new Point(CalendarLeftMargin, _calendar.Bottom + 16);
-        m_oSafetyInfoCard.Size = new Size(_calendar.Width, 180);
+        m_oSafetyInfoCard.Location = new Point(CalendarLeftMargin, _calendar.Bottom + 12);
+        m_oSafetyInfoCard.Size = new Size(_calendar.Width, 104 * DeviceDpi / 96);
 		var panel1Width = _calendar.Width + CalendarLeftMargin + 20;
 		if (_workspaceSplit.SplitterDistance != panel1Width)
 			_workspaceSplit.SplitterDistance = panel1Width;
