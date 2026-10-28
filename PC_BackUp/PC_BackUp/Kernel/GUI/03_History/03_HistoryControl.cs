@@ -306,15 +306,22 @@ public partial class HistoryControl : UserControlBase
             _workspaceSplit.SplitterDistance = panel1Width;
 
         // 캘린더 아래로 남는 빈 공간을 "이번 달 요약" + "최근 이력 바로가기"로 채운다.
-        var contentTop = _calendar.Bottom + 14;
+        // 맨 위로 스크롤한 상태에서도 가장 최근 이력 카드가 잘리지 않도록 간격과 카드 높이를 촘촘하게 잡는다.
+        // 다섯 건은 모두 펼쳐 두고, 넘치는 부분은 왼쪽 패널 전체 스크롤로 본다(목록 안에 스크롤을 따로 두지 않는다).
+        var contentTop = _calendar.Bottom + 8;
         _calendarStatsLabel.Location = new Point(_calendar.Left, contentTop);
         _calendarStatsLabel.Size = new Size(_calendar.Width, 20);
-        _calendarRecentTitle.Location = new Point(_calendar.Left, contentTop + 26);
+        _calendarRecentTitle.Location = new Point(_calendar.Left, contentTop + 22);
         _calendarRecentTitle.Size = new Size(_calendar.Width, 18);
-        _calendarRecentPanel.Location = new Point(_calendar.Left, contentTop + 46);
-        // 최근 이력은 다섯 건을 두되, 스크롤하지 않았을 때는 맨 위 카드 1건만 잘림 없이 보이게
-        // 높이를 맞춘다(위 여백 2 + 카드 56 + 카드 아래 여백 8). 나머지는 이 목록 안에서 스크롤한다.
-        _calendarRecentPanel.Size = new Size(_calendar.Width, 66 * DeviceDpi / 96);
+        _calendarRecentPanel.Location = new Point(_calendar.Left, contentTop + 42);
+        ResizeRecentPanel();
+    }
+
+    /// <summary>최근 이력 카드 수에 맞춰 목록 높이를 늘려 목록 안 스크롤이 생기지 않게 한다.</summary>
+    private void ResizeRecentPanel()
+    {
+        var count = Math.Max(1, _calendarRecentPanel.Controls.Count);
+        _calendarRecentPanel.Size = new Size(_calendar.Width, (2 + count * (RecentCardHeight + RecentCardGap)) * DeviceDpi / 96);
     }
 
     /// <summary>
@@ -345,9 +352,9 @@ public partial class HistoryControl : UserControlBase
                 var button = new Button
                 {
                     Tag = date, AutoSize = false,
-                    Size = new Size(_calendar.Width - SystemInformation.VerticalScrollBarWidth - 4, 56 * DeviceDpi / 96),
+                    Size = new Size(_calendar.Width, RecentCardHeight * DeviceDpi / 96),
                     FlatStyle = FlatStyle.Flat, TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
-                    Padding = new Padding(8, 0, 8, 0), Margin = new Padding(0, 0, 0, 8),
+                    Padding = new Padding(8, 0, 8, 0), Margin = new Padding(0, 0, 0, RecentCardGap * DeviceDpi / 96),
                     Font = _calendar.Font, Cursor = Cursors.Hand, UseVisualStyleBackColor = false
                 };
                 button.FlatAppearance.MouseOverBackColor = ColorRGB.SecondaryHover;
@@ -366,6 +373,7 @@ public partial class HistoryControl : UserControlBase
                     Text = "아직 기록된 이력이 없습니다.", AutoSize = true,
                     ForeColor = ColorRGB.MutedText, Font = _calendar.Font
                 });
+            ResizeRecentPanel();
         }
         foreach (var button in _calendarRecentPanel.Controls.OfType<Button>())
         {
