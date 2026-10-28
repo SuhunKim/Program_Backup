@@ -29,7 +29,7 @@ public partial class HistoryControl : UserControlBase
 
         // 아이콘 배지(IconGlyphs)는 GDI+ Paint 이벤트로 그려서 디자이너가 표현할 수 없는
         // 부분이라, 디자이너가 그려둔 고정 골격(workspace)에 여기서 덧붙인다.
-        workspace.Controls.Add(BuildSummaryRow());
+        m_oWorkspaceLayout.Controls.Add(BuildSummaryRow(), 0, 0);
 
         // [Codex - 2026.09.21] 커스텀 달력의 선택/월 이동을 기존 이력 조회 흐름에 연결한다.
         _calendar.DateSelected += (_, date) => SelectDate(date);
@@ -40,6 +40,7 @@ public partial class HistoryControl : UserControlBase
             if (_grid.Columns[e.ColumnIndex].HeaderText == "No.")
                 e.Value = (e.RowIndex + 1).ToString();
         };
+        ColorRGB.ConfigureGridEmptyState(_grid, _emptyStateLabel);
         _grid.CellPainting += UiPaint_ApplyHeader;
         _grid.CellMouseClick += UiClick_ApplyHeader;
         _grid.CellPainting += UiPaint_DiffCell;
@@ -111,8 +112,10 @@ public partial class HistoryControl : UserControlBase
     /// <summary>상단 "선택된 이력 날짜 / 이력 요약" 카드 두 개 — 원형 아이콘을 코드로 그려야 해서 디자이너로 옮기지 못했다.</summary>
     private Control BuildSummaryRow()
     {
-        var row = new Panel { Dock = DockStyle.Top, Height = 92, Padding = new Padding(16, 16, 16, 16) };
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
+        // [Codex - 2026.10.28] 카드 내부 텍스트와 하단 테두리가 모두 보이도록 두 화면의 높이/여백을 맞춘다.
+        var row = new Panel { Dock = DockStyle.Top, Height = 108 * DeviceDpi / 96, MinimumSize = new Size(0, 108 * DeviceDpi / 96), Margin = Padding.Empty, Padding = new Padding(0, 0, 0, 16) };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty };
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
 
@@ -121,14 +124,14 @@ public partial class HistoryControl : UserControlBase
         dateIcon.BackColor = ColorRGB.Surface;
         var dateCard = ColorRGB.CreateStatCard(dateIcon, _summaryDateCaption, _summaryDateValue);
         dateCard.Dock = DockStyle.Fill;
-        //dateCard.Margin = new Padding(3); //Padding(0, 0, 8, 0);
+        dateCard.Margin = new Padding(0, 0, 8, 0);
 
         _summaryCountCaption.Text = "이력 요약";
         var countIcon = IconGlyphs.CreateBadge(36, ColorRGB.SidebarActive, ColorRGB.Primary, IconGlyphs.Archive);
         countIcon.BackColor = ColorRGB.Surface;
         var countCard = ColorRGB.CreateStatCard(countIcon, _summaryCountCaption, _summaryCountValue);
         countCard.Dock = DockStyle.Fill;
-        //countCard.Margin = new Padding(8, 0, 0, 0);
+        countCard.Margin = new Padding(8, 0, 0, 0);
 
         layout.Controls.Add(dateCard, 0, 0);
         layout.Controls.Add(countCard, 1, 0);
@@ -296,6 +299,7 @@ public partial class HistoryControl : UserControlBase
     /// </summary>
     private void ApplyCalendarSizing()
     {
+        _workspaceSplit.Panel1.AutoScrollPosition = Point.Empty;
         _calendar.Size = _calendar.PreferredSize;
         var panel1Width = _calendar.Width + CalendarLeftMargin + 20;
         if (_workspaceSplit.SplitterDistance != panel1Width)
@@ -308,12 +312,13 @@ public partial class HistoryControl : UserControlBase
         _calendarRecentTitle.Location = new Point(_calendar.Left, contentTop + 26);
         _calendarRecentTitle.Size = new Size(_calendar.Width, 18);
         _calendarRecentPanel.Location = new Point(_calendar.Left, contentTop + 46);
-        _calendarRecentPanel.Size = new Size(_calendar.Width, 160);
+        // [Codex - 2026.10.28] 작은 창에서는 날짜 영역을 스크롤해 최근 이력 다섯 건까지 접근한다.
+        _calendarRecentPanel.Size = new Size(_calendar.Width, 320 * DeviceDpi / 96);
     }
 
     /// <summary>
     /// 캘린더 아래 "이번 달 요약"과 "최근 이력" 바로가기 목록을 갱신한다. referenceDate가 속한
-    /// 달을 기준으로 통계를 내고, 전체 기록 중 최근 날짜 5개를 클릭 가능한 링크로 보여준다 —
+    /// 달을 기준으로 통계를 내고, 전체 기록 중 최근 날짜 5개를 건수와 선택 상태가 있는 버튼 목록으로 보여준다 —
     /// 클릭하면 그 날짜로 캘린더 선택이 바로 이동한다.
     /// </summary>
     private void UpdateCalendarSidebar(DateTime referenceDate)
@@ -324,28 +329,56 @@ public partial class HistoryControl : UserControlBase
             entry.Timestamp.Year == referenceDate.Year && entry.Timestamp.Month == referenceDate.Month);
         _calendarStatsLabel.Text = string.Format("이번 달 백업 {0}건  ·  로그 {1}건", monthBackupCount, monthLogCount);
 
-        _calendarRecentPanel.Controls.Clear();
+        // [Codex - 2026.10.28] 날짜 목록이 같으면 컨트롤을 재생성하지 않아 키보드 포커스를 유지한다.
         var recentDates = m_oAllRecords.Select(record => record.CreatedAt.Date)
             .Union(m_oAllLogEntries.Select(entry => entry.Timestamp.Date))
-            .Distinct()
-            .OrderByDescending(date => date)
-            .Take(5);
-        foreach (var date in recentDates)
+            .Distinct().OrderByDescending(date => date).Take(5).ToArray();
+        var existingDates = _calendarRecentPanel.Controls.OfType<Button>()
+            .Select(button => (DateTime)button.Tag!).ToArray();
+        if (_calendarRecentPanel.Controls.Count == 0 || !existingDates.SequenceEqual(recentDates))
         {
-            var link = new LinkLabel
+            while (_calendarRecentPanel.Controls.Count > 0)
+                _calendarRecentPanel.Controls[0].Dispose();
+            foreach (var date in recentDates)
             {
-                Text = string.Format("{0:yyyy-MM-dd}", date),
-                AutoSize = true,
-                Font = new Font("맑은 고딕", 8.5F),
-                LinkColor = ColorRGB.Primary,
-                Margin = new Padding(0, 2, 0, 2)
-            };
-            link.Click += (_, _) =>
-            {
-                _calendar.SelectedDate = date;
-                SelectDate(date);
-            };
-            _calendarRecentPanel.Controls.Add(link);
+                var button = new Button
+                {
+                    Tag = date, AutoSize = false,
+                    Size = new Size(_calendar.Width - SystemInformation.VerticalScrollBarWidth - 4, 56 * DeviceDpi / 96),
+                    FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
+                    Padding = new Padding(8, 0, 8, 0), Margin = new Padding(0, 0, 0, 8),
+                    Font = _calendar.Font, Cursor = Cursors.Hand, UseVisualStyleBackColor = false
+                };
+                button.FlatAppearance.MouseOverBackColor = ColorRGB.SecondaryHover;
+                button.FlatAppearance.MouseDownBackColor = ColorRGB.SecondaryPressed;
+                button.Click += (_, _) =>
+                {
+                    if (m_bIsBusy) return;
+                    _calendar.SelectedDate = date;
+                    SelectDate(date);
+                };
+                _calendarRecentPanel.Controls.Add(button);
+            }
+            if (recentDates.Length == 0)
+                _calendarRecentPanel.Controls.Add(new Label
+                {
+                    Text = "아직 기록된 이력이 없습니다.", AutoSize = true,
+                    ForeColor = ColorRGB.MutedText, Font = _calendar.Font
+                });
+        }
+        foreach (var button in _calendarRecentPanel.Controls.OfType<Button>())
+        {
+            var date = (DateTime)button.Tag!;
+            var selected = date == _calendar.SelectedDate;
+            var backupCount = m_oAllRecords.Count(record => record.CreatedAt.Date == date);
+            var logCount = m_oAllLogEntries.Count(entry => entry.Timestamp.Date == date);
+            button.Text = string.Format("{0:yyyy.MM.dd}  {1}\n백업 {2}건  ·  로그 {3}건",
+                date, selected ? "선택됨" : "›", backupCount, logCount);
+            button.AccessibleName = string.Format("{0:yyyy년 M월 d일}, 백업 {1}건, 로그 {2}건{3}",
+                date, backupCount, logCount, selected ? ", 선택됨" : string.Empty);
+            button.BackColor = selected ? ColorRGB.SidebarActive : ColorRGB.DetailPanelBackground;
+            button.ForeColor = selected ? ColorRGB.Primary : ColorRGB.Text;
+            button.FlatAppearance.BorderColor = selected ? ColorRGB.Primary : ColorRGB.Border;
         }
     }
 
@@ -652,6 +685,7 @@ public partial class HistoryControl : UserControlBase
         _sourceCombo.Enabled = !busy && !_sourceIsCurrentCheckBox.Checked;
         _sourceIsCurrentCheckBox.Enabled = !busy;
         _calendar.Enabled = !busy;
+        _calendarRecentPanel.Enabled = !busy;
         _applyButton.Enabled = false;
         _compareButton.Enabled = !busy;
         _logViewButton.Enabled = !busy;

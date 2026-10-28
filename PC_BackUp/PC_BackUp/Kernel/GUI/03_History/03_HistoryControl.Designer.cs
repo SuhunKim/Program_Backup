@@ -15,6 +15,7 @@ partial class HistoryControl
     private Label headerTitleLabel = null!;
     private Label headerDescriptionLabel = null!;
     private CardPanel workspace = null!;
+    private TableLayoutPanel m_oWorkspaceLayout = null!;
     private Label calendarTitle = null!;
     private Panel gridHost = null!;
     private Panel selectionBar = null!;
@@ -64,6 +65,7 @@ partial class HistoryControl
         headerDescriptionLabel = new Label();
         headerTitleLabel = new Label();
         workspace = new CardPanel();
+        m_oWorkspaceLayout = new TableLayoutPanel();
         _workspaceSplit = new SplitContainer();
         calendarTitle = new Label();
         gridHost = new Panel();
@@ -91,6 +93,7 @@ partial class HistoryControl
         headerPanel.Controls.Add(headerTitleLabel);
         headerPanel.Location = new Point(20, 16);
         headerPanel.Name = "headerPanel";
+        headerPanel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         headerPanel.Padding = new Padding(8, 2, 0, 0);
         headerPanel.Size = new Size(960, 66);
         headerPanel.TabIndex = 2;
@@ -122,15 +125,28 @@ partial class HistoryControl
         // workspace
         // 
         workspace.BackColor = Color.White;
-        workspace.Controls.Add(_workspaceSplit);
-        workspace.Controls.Add(bottomBar);
         // [Codex - 2026.09.21] 요약 카드가 추가되어도 본문을 덮지 않도록 영역을 도킹한다.
         workspace.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         workspace.Location = new Point(0, 100);
         workspace.Name = "workspace";
-        workspace.Padding = new Padding(1);
+        workspace.Padding = new Padding(16);
         workspace.Size = new Size(1000, 568);
         workspace.TabIndex = 0;
+        // [Codex - 2026.10.28] 요약/본문/작업 영역을 별도 행으로 배치해 도킹 순서에 의한 겹침을 없앤다.
+        m_oWorkspaceLayout.Dock = DockStyle.Fill;
+        m_oWorkspaceLayout.ColumnCount = 1;
+        m_oWorkspaceLayout.RowCount = 3;
+        m_oWorkspaceLayout.Margin = Padding.Empty;
+        m_oWorkspaceLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        m_oWorkspaceLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        m_oWorkspaceLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        m_oWorkspaceLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
+        _workspaceSplit.Margin = Padding.Empty;
+        bottomBar.Margin = Padding.Empty;
+        bottomBar.Dock = DockStyle.Fill;
+        m_oWorkspaceLayout.Controls.Add(_workspaceSplit, 0, 1);
+        m_oWorkspaceLayout.Controls.Add(bottomBar, 0, 2);
+        workspace.Controls.Add(m_oWorkspaceLayout);
         // 
         // _workspaceSplit
         // 
@@ -144,6 +160,7 @@ partial class HistoryControl
         // _workspaceSplit.Panel1
         // 
         _workspaceSplit.Panel1.BackColor = Color.White;
+        _workspaceSplit.Panel1.AutoScroll = true;
         // [Codex - 2026.09.21] 이력 달력과 월간 요약을 왼쪽 패널에 배치한다.
         _workspaceSplit.Panel1.Controls.Add(_calendarRecentPanel);
         _workspaceSplit.Panel1.Controls.Add(_calendarRecentTitle);
@@ -151,6 +168,7 @@ partial class HistoryControl
         _workspaceSplit.Panel1.Controls.Add(_calendar);
         _workspaceSplit.Panel1.Controls.Add(calendarTitle);
         _calendar.Location = new Point(CalendarLeftMargin, CalendarTitleHeight);
+        _calendar.AccessibleName = "이력 날짜";
         _calendarStatsLabel.Font = new Font("맑은 고딕", 8.5F);
         _calendarStatsLabel.ForeColor = ColorRGB.MutedText;
         _calendarRecentTitle.Text = "최근 이력";
@@ -163,6 +181,7 @@ partial class HistoryControl
         // _workspaceSplit.Panel2
         // 
         _workspaceSplit.Panel2.BackColor = Color.White;
+        _workspaceSplit.Panel2.Padding = new Padding(16, 0, 0, 0);
         _workspaceSplit.Panel2.Controls.Add(gridHost);
         _workspaceSplit.Panel2.Controls.Add(selectionBar);
         _workspaceSplit.Size = new Size(960, 447);
@@ -176,7 +195,7 @@ partial class HistoryControl
         calendarTitle.ForeColor = Color.FromArgb(28, 32, 41);
         calendarTitle.Location = new Point(0, 0);
         calendarTitle.Name = "calendarTitle";
-        calendarTitle.Size = new Size(121, 23);
+        calendarTitle.Size = new Size(121, CalendarTitleHeight);
         calendarTitle.TabIndex = 0;
         calendarTitle.Text = "이력 날짜";
         // 
@@ -192,6 +211,7 @@ partial class HistoryControl
         _grid.Dock = DockStyle.Fill;
         _grid.BackgroundColor = ColorRGB.Surface;
         _grid.BorderStyle = BorderStyle.None;
+        ColorRGB.ApplyDataGridStyle(_grid);
         _grid.AutoGenerateColumns = false;
         _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = false;
@@ -209,6 +229,7 @@ partial class HistoryControl
         _existenceTitleLabel.Height = 24;
         _existenceTitleLabel.Text = "파일/폴더 존재 차이";
         _existenceGrid.Dock = DockStyle.Fill;
+        ColorRGB.ApplyDataGridStyle(_existenceGrid);
         _existenceGrid.AutoGenerateColumns = false;
         _existenceGrid.AllowUserToAddRows = false;
         _existenceGrid.RowHeadersVisible = false;
@@ -231,7 +252,7 @@ partial class HistoryControl
         selectionBar.Dock = DockStyle.Top;
         selectionBar.Location = new Point(0, 0);
         selectionBar.Name = "selectionBar";
-        selectionBar.Padding = new Padding(18, 8, 18, 8);
+        selectionBar.Padding = new Padding(0, 0, 0, 12);
         selectionBar.Size = new Size(835, 84);
         selectionBar.TabIndex = 1;
         // 
@@ -327,7 +348,8 @@ partial class HistoryControl
         _progress.Height = 6;
         bottomBar.Controls.Add(_summaryLabel);
         bottomBar.Controls.Add(_progress);
-        bottomBar.Dock = DockStyle.Bottom;
+        bottomBar.Controls.SetChildIndex(_summaryLabel, 0);
+        bottomBar.Dock = DockStyle.Fill;
         bottomBar.Location = new Point(20, 497);
         bottomBar.Name = "bottomBar";
         bottomBar.Padding = new Padding(0, 12, 0, 0);

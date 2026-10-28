@@ -12,6 +12,7 @@ public partial class RecoveryControl : UserControlBase
 	private LogManager? m_oLoggingService;
 	private bool m_bIsBusy;
     private int m_iCatalogVersion;
+    private Control m_oSafetyInfoCard = null!;
 	private CancellationTokenSource? m_oCancellationTokenSource;
 	private BackupRecord? m_oPendingSelectedRecord;
 	private readonly System.Windows.Forms.Timer m_oRefreshDebounceTimer = new() { Interval = 500 };
@@ -33,13 +34,15 @@ public partial class RecoveryControl : UserControlBase
 		_grid.SelectionChanged += (_, _) => UpdateSelectedBackupDetails();
 
 		_cancelButton.Click += (_, _) => m_oCancellationTokenSource?.Cancel();
-		_calendar.DateSelected += (_, eventArgs) => LoadDate(eventArgs.Start);
+		// [Codex - 2026.10.28] 이력 관리와 같은 날짜 선택 이벤트를 사용한다.
+		_calendar.DateSelected += (_, date) => LoadDate(date);
 
-		workspace.Controls.Add(BuildSummaryRow());
-		var safetyInfoCard = BuildSafetyInfoCard();
-		safetyInfoCard.Dock = DockStyle.Right;
-		safetyInfoCard.Width = 300;
-		detailsPanel.Controls.Add(safetyInfoCard);
+		m_oWorkspaceLayout.Controls.Add(BuildSummaryRow(), 0, 0);
+        // [Codex - 2026.10.28] 안내 카드는 달력 아래로 옮겨 좁은 창에서도 선택 백업 정보의 폭을 확보한다.
+        m_oSafetyInfoCard = BuildSafetyInfoCard();
+        _workspaceSplit.Panel1.Controls.Add(m_oSafetyInfoCard);
+        ColorRGB.ConfigureGridEmptyState(_grid, _emptyLabel);
+        UpdateSelectedBackupDetails();
 
 		m_oRefreshDebounceTimer.Tick += (_, _) =>
 		{
@@ -77,8 +80,10 @@ public partial class RecoveryControl : UserControlBase
 	/// <summary>상단 "선택된 백업 날짜 / 백업 요약" 카드 두 개 — 원형 아이콘을 코드로 그려야 해서 디자이너로 옮기지 못했다.</summary>
 	private Control BuildSummaryRow()
 	{
-		var row = new Panel { Dock = DockStyle.Top, Height = 92, Padding = new Padding(0, 0, 0, 16) };
-		var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
+		// [Codex - 2026.10.28] 카드 내부 텍스트와 하단 테두리가 모두 보이도록 두 화면의 높이/여백을 맞춘다.
+		var row = new Panel { Dock = DockStyle.Top, Height = 108 * DeviceDpi / 96, MinimumSize = new Size(0, 108 * DeviceDpi / 96), Margin = Padding.Empty, Padding = new Padding(0, 0, 0, 16) };
+		var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty };
+		layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 		layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
 		layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
 
@@ -137,14 +142,13 @@ public partial class RecoveryControl : UserControlBase
 		return card;
 	}
 
-	/// <summary>
-	/// MonthCalendar가 실제 화면에 붙어 핸들이 만들어진 뒤에야 PreferredSize가 정확해지므로,
-	/// 화면이 표시될 때마다(= 이 화면으로 올 때마다) 실제 크기를 다시 재서 패널 폭에 반영한다.
-	/// 생성 시점에 미리 계산해 두면(=핸들이 없을 때) 한 달 격자가 깨져서 요일/날짜 줄이 겹쳐 보인다.
-	/// </summary>
+	/// <summary>공용 달력의 크기에 맞춰 날짜 영역의 폭을 확보한다.</summary>
 	private void ApplyCalendarSizing()
 	{
-		_calendar.Size = _calendar.PreferredSize;
+		_workspaceSplit.Panel1.AutoScrollPosition = Point.Empty;
+        _calendar.Size = _calendar.PreferredSize;
+        m_oSafetyInfoCard.Location = new Point(CalendarLeftMargin, _calendar.Bottom + 16);
+        m_oSafetyInfoCard.Size = new Size(_calendar.Width, 180);
 		var panel1Width = _calendar.Width + CalendarLeftMargin + 20;
 		if (_workspaceSplit.SplitterDistance != panel1Width)
 			_workspaceSplit.SplitterDistance = panel1Width;
@@ -162,10 +166,10 @@ public partial class RecoveryControl : UserControlBase
 		_compareBeforeRestoreCheckBox.Checked = settings.CompareBeforeRestore;
         var catalog = await m_oCatalogService.RefreshAsync(settings.BackupRootPath);
         if (IsDisposed || Disposing || version != m_iCatalogVersion) return;
-		_calendar.BoldedDates = catalog.Keys.ToArray();
-		_calendar.UpdateBoldedDates();
-		var selectedDate = m_oPendingSelectedRecord?.CreatedAt.Date ?? _calendar.SelectionStart;
-		_calendar.SetDate(selectedDate);
+		// [Codex - 2026.10.28] 백업 날짜를 공용 달력의 점/굵은 글씨 표식으로 표시한다.
+		_calendar.SetHistoryDates(catalog.Keys);
+		var selectedDate = m_oPendingSelectedRecord?.CreatedAt.Date ?? _calendar.SelectedDate;
+		_calendar.SelectedDate = selectedDate;
 		LoadDate(selectedDate);
 		SelectPendingBackup();
 		WatchBackupFolder(settings.BackupRootPath);
@@ -537,6 +541,8 @@ public partial class RecoveryControl : UserControlBase
 	private void UpdateSelectedBackupDetails()
 	{
 		var record = _grid.CurrentRow?.DataBoundItem as BackupRecord;
+        // [Codex - 2026.10.28] 선택 전에는 목록의 빈 상태 안내에 공간을 할당한다.
+        detailsPanel.Visible = record is not null;
 		if (record is null)
 		{
 			_selectedBackupLabel.Text = "선택한 백업 없음";
