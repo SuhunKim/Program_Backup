@@ -60,15 +60,14 @@ partial class BackupControl
         // 
         // body
         // 
+        body.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         body.AutoScroll = true;
         body.BackColor = Color.FromArgb(255, 255, 255);
         body.Controls.Add(action);
         body.Controls.Add(optionCard);
         body.Controls.Add(statusCard);
-        // [Codex - 2026.09.21] 본문이 상단 제목 영역을 덮지 않도록 다른 메뉴와 같은 위치에서 시작한다.
-        body.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-        body.Name = "body";
         body.Location = new Point(0, 100);
+        body.Name = "body";
         body.Size = new Size(1000, 600);
         body.TabIndex = 0;
         // 
@@ -77,7 +76,6 @@ partial class BackupControl
         action.Controls.Add(statusLabel);
         action.Controls.Add(cancelButton);
         action.Controls.Add(backupButton);
-        // [Claude - 2026.10.08] 도킹은 Controls 뒤쪽부터 처리된다: progressBar(맨 위) → progressGap(여백) → 버튼 순.
         action.Controls.Add(progressGap);
         action.Controls.Add(progressBar);
         action.Location = new Point(20, 399);
@@ -90,9 +88,9 @@ partial class BackupControl
         // 
         statusLabel.Dock = DockStyle.Fill;
         statusLabel.ForeColor = Color.FromArgb(108, 115, 128);
-        statusLabel.Location = new Point(0, 20);
+        statusLabel.Location = new Point(0, 54);
         statusLabel.Name = "statusLabel";
-        statusLabel.Size = new Size(700, 51);
+        statusLabel.Size = new Size(700, 35);
         statusLabel.TabIndex = 0;
         statusLabel.Text = "환경 설정을 확인한 뒤 백업을 시작하세요.";
         statusLabel.TextAlign = ContentAlignment.MiddleLeft;
@@ -105,10 +103,10 @@ partial class BackupControl
         cancelButton.Dock = DockStyle.Right;
         cancelButton.Font = new Font("맑은 고딕", 9F);
         cancelButton.ForeColor = Color.FromArgb(28, 32, 41);
-        cancelButton.Location = new Point(700, 20);
+        cancelButton.Location = new Point(700, 54);
         cancelButton.Margin = new Padding(0, 0, 10, 0);
         cancelButton.Name = "cancelButton";
-        cancelButton.Size = new Size(100, 51);
+        cancelButton.Size = new Size(100, 35);
         cancelButton.TabIndex = 1;
         cancelButton.Text = "취소";
         cancelButton.Visible = false;
@@ -120,28 +118,29 @@ partial class BackupControl
         backupButton.Dock = DockStyle.Right;
         backupButton.Font = new Font("맑은 고딕", 10F, FontStyle.Bold);
         backupButton.ForeColor = Color.White;
-        backupButton.Location = new Point(800, 20);
+        backupButton.Location = new Point(800, 54);
         backupButton.Name = "backupButton";
-        backupButton.Size = new Size(160, 51);
+        backupButton.Size = new Size(160, 35);
         backupButton.TabIndex = 2;
         backupButton.Text = "백업 시작";
         backupButton.Click += UiClick_Backup;
         // 
+        // progressGap
+        // 
+        progressGap.Dock = DockStyle.Top;
+        progressGap.Location = new Point(0, 26);
+        progressGap.Name = "progressGap";
+        progressGap.Size = new Size(960, 28);
+        progressGap.TabIndex = 4;
+        // 
         // progressBar
         // 
         progressBar.Dock = DockStyle.Top;
+        progressBar.Font = new Font("맑은 고딕", 8.5F, FontStyle.Bold);
         progressBar.Location = new Point(0, 4);
         progressBar.Name = "progressBar";
         progressBar.Size = new Size(960, 22);
         progressBar.TabIndex = 3;
-        //
-        // progressGap
-        //
-        progressGap.Dock = DockStyle.Top;
-        progressGap.Location = new Point(0, 26);
-        progressGap.Name = "progressGap";
-        progressGap.Size = new Size(960, 14);
-        progressGap.TabIndex = 4;
         // 
         // optionCard
         // 
